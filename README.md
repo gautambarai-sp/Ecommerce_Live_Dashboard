@@ -1,6 +1,26 @@
-# E-Commerce Analytics Dashboard (Streamlit)
+# DataPulse - E-Commerce Analytics Platform
 
-A complete, production-ready analytics dashboard built with Streamlit.
+<div align="center">
+  <h3>📊 Production-Grade Analytics for E-Commerce</h3>
+  <p>Upload → Analyze → Visualize → Decide</p>
+</div>
+
+---
+
+## ✨ Features
+
+| Feature | Description |
+|---------|-------------|
+| 📁 **Multi-Dataset** | Upload and manage multiple CSV/Excel files |
+| 🔗 **Smart Column Mapping** | Auto-detect + manual override |
+| 📊 **Live Dashboard** | Real-time KPIs, charts, trends |
+| 🤖 **AI Analyst** | Ask questions in plain English |
+| 📈 **Dynamic Reports** | Generate detailed analysis reports |
+| 🔴 **Live Mode** | Auto-refresh dashboard every 5 seconds |
+| 💰 **INR Support** | Indian Rupee with Lakhs/Crores formatting |
+| 🔐 **Business Rules** | Accurate calculations (no hallucinations) |
+
+---
 
 ## 🚀 Quick Start
 
@@ -11,143 +31,83 @@ pip install -r requirements.txt
 # 2. Run the app
 streamlit run app.py
 
-# 3. Open in browser
-# http://localhost:8501
+# 3. Open browser at http://localhost:8501
 ```
 
-## ✨ Features
-
-| Feature | Description |
-|---------|-------------|
-| 📁 **CSV Upload** | Drag & drop CSV/Excel files |
-| 🔗 **Column Mapping** | Map your columns to standard fields |
-| 🧹 **Auto-Cleaning** | Remove duplicates, test orders, standardize data |
-| 📊 **Live Dashboard** | KPIs, charts, trends - all from your data |
-| 🤖 **AI Chat** | Ask questions in plain English |
-| 📈 **Dynamic Visuals** | Charts generated based on queries |
-| 💰 **INR Currency** | Indian Rupee formatting (₹, Lakhs, Crores) |
+---
 
 ## 📊 Dashboard Sections
 
-### KPIs
-- Total Revenue (delivered orders only)
-- Average Order Value
-- Total Orders
-- RTO Rate (correct formula!)
+### Key Metrics
+- **Total Revenue** - Sum of delivered orders only
+- **Average Order Value** - Mean of delivered orders
+- **Total Orders** - All orders count
+- **RTO Rate** - Correct formula: RTO / (Delivered + RTO)
 
 ### Charts
-- Revenue Trend (monthly)
+- Revenue Trend (daily/weekly/monthly)
 - Orders by Status (pie)
 - Top Products (bar)
-- COD vs Prepaid comparison
+- Payment Methods (bar)
+- COD vs Prepaid Analysis
 - RTO by Payment Method
+- RTO by City
+- Category Performance (treemap)
 
-### AI Chat
-Ask questions like:
+### AI Analyst Queries
 - "What is my total revenue?"
 - "Show RTO rate by payment method"
 - "Top 10 products"
 - "COD vs Prepaid comparison"
 - "Revenue by category"
 
-## 🔐 Business Rules (Built-In)
+---
 
-```
-✅ Revenue = SUM(amount) WHERE status = 'delivered'
-✅ AOV = AVG(amount) WHERE status = 'delivered'
-✅ RTO Rate = RTO / (Delivered + RTO) × 100
-```
+## 🔐 Business Rules (Hardcoded)
 
-These rules are **hardcoded** - the AI cannot hallucinate wrong calculations.
-
-## 🌐 Deploy to Streamlit Cloud (Free!)
-
-### Step 1: Push to GitHub
-
-```bash
-git init
-git add .
-git commit -m "Initial commit"
-git remote add origin https://github.com/YOUR_USERNAME/ecommerce-dashboard.git
-git push -u origin main
-```
-
-### Step 2: Deploy
-
-1. Go to [share.streamlit.io](https://share.streamlit.io)
-2. Click "New app"
-3. Connect your GitHub repo
-4. Select `app.py` as main file
-5. Click "Deploy"
-
-**That's it!** You'll get a free URL like:
-`https://your-app.streamlit.app`
-
-## 📁 Project Structure
-
-```
-streamlit_dashboard/
-├── app.py              # Main application (everything in one file!)
-├── requirements.txt    # Dependencies
-└── README.md          # This file
-```
-
-## 🎯 Why Streamlit for MVP?
-
-| Advantage | Explanation |
-|-----------|-------------|
-| **Speed** | Built entire dashboard in 1 file |
-| **Python Native** | No separate frontend/backend |
-| **Free Hosting** | Streamlit Cloud is free |
-| **Real-time** | Auto-refresh on data changes |
-| **Easy Demo** | Just share the URL |
-
-## 📱 Screenshots
-
-### Dashboard
-![Dashboard](https://via.placeholder.com/800x400?text=Dashboard+Screenshot)
-
-### AI Chat
-![AI Chat](https://via.placeholder.com/800x400?text=AI+Chat+Screenshot)
-
-### Column Mapping
-![Mapping](https://via.placeholder.com/800x400?text=Column+Mapping+Screenshot)
-
-## 🔧 Customization
-
-### Add New Query Type
-
-1. Add pattern to `parse_user_query()`:
 ```python
-patterns = {
-    'my_new_query': [r'pattern1', r'pattern2'],
-    ...
-}
+# Revenue = Delivered orders only
+revenue = df[df['status'] == 'Delivered']['amount'].sum()
+
+# AOV = Delivered orders only  
+aov = df[df['status'] == 'Delivered']['amount'].mean()
+
+# RTO Rate = RTO / (Delivered + RTO) × 100
+shipped = df[df['status'].isin(['Delivered', 'RTO'])]
+rto_rate = len(shipped[shipped['status'] == 'RTO']) / len(shipped) * 100
 ```
 
-2. Add method to `QueryEngine`:
-```python
-def _query_my_new_query(self) -> Tuple[Any, str, str]:
-    # Your logic here
-    return result, "Explanation", "SQL equivalent"
-```
+---
 
-### Change Currency
+## 📁 Data Requirements
 
-Edit the `format_inr()` function:
-```python
-def format_inr(value: float) -> str:
-    # Change to USD, EUR, etc.
-    ...
-```
+### Required Columns
+| Field | Description |
+|-------|-------------|
+| Order ID | Unique identifier |
+| Order Amount | Total value |
+| Order Status | Delivered, RTO, Cancelled |
 
-## 🤝 Contributing
+### Optional Columns
+| Field | Description |
+|-------|-------------|
+| Order Date | For trend analysis |
+| Payment Method | COD, UPI, Card |
+| Customer Name | For customer analysis |
+| Category | Product category |
+| City | For location analysis |
 
-1. Fork the repo
-2. Create a branch
-3. Make changes
-4. Submit PR
+---
+
+## 🌐 Deploy to Streamlit Cloud (FREE)
+
+1. Push to GitHub
+2. Go to [share.streamlit.io](https://share.streamlit.io)
+3. Connect repo → Deploy
+4. Get URL: `https://your-app.streamlit.app`
+
+---
 
 ## 📄 License
 
-MIT License - Use freely for your projects!
+MIT License - Use freely for your projects.
