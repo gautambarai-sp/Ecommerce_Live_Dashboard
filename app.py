@@ -1,95 +1,258 @@
 """
-E-Commerce Analytics Dashboard - Streamlit App
-==============================================
-A complete analytics platform with:
-- CSV Upload & Auto-cleaning
-- Column Mapping
-- AI Chatbot with deterministic queries
-- Dynamic visualizations
-- Real-time updates
+E-Commerce Analytics Platform - Production Grade
+================================================
+A market-ready analytics dashboard for e-commerce businesses.
 
-Run with: streamlit run app.py
+Features:
+- Multi-dataset management
+- Real-time dashboard updates
+- AI-powered query engine
+- Dynamic visualization builder
+- Live streaming data simulation
+- Professional UI/UX
+
+Run: streamlit run app.py
 """
 
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
+import time
 import re
 from typing import Dict, List, Any, Optional, Tuple
 import json
+import hashlib
 
-# Page config
+# =============================================================================
+# PAGE CONFIGURATION
+# =============================================================================
+
 st.set_page_config(
-    page_title="E-Commerce Analytics",
+    page_title="DataPulse Analytics",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS
+# =============================================================================
+# CUSTOM CSS - Professional UI
+# =============================================================================
+
 st.markdown("""
 <style>
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: 700;
-        color: #1e293b;
-        margin-bottom: 0;
+    /* Main container */
+    .main .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+        max-width: 1400px;
     }
-    .sub-header {
+    
+    /* Headers */
+    .main-title {
+        font-size: 2.2rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.5rem;
+    }
+    
+    .sub-title {
         font-size: 1rem;
         color: #64748b;
-        margin-top: 0;
+        margin-bottom: 2rem;
     }
-    .metric-card {
-        background: white;
+    
+    /* Metric cards */
+    .metric-container {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
         padding: 1.5rem;
-        border-radius: 12px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        border-left: 4px solid #3b82f6;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+        transition: transform 0.2s, box-shadow 0.2s;
     }
+    
+    .metric-container:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+    }
+    
     .metric-value {
         font-size: 2rem;
         font-weight: 700;
         color: #1e293b;
+        line-height: 1.2;
     }
+    
     .metric-label {
         font-size: 0.875rem;
         color: #64748b;
+        font-weight: 500;
+        margin-bottom: 0.5rem;
     }
-    .chat-user {
-        background: #3b82f6;
-        color: white;
-        padding: 12px 16px;
-        border-radius: 18px 18px 4px 18px;
-        margin: 8px 0;
-        max-width: 80%;
-        margin-left: auto;
+    
+    .metric-delta {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 9999px;
+        display: inline-block;
+        margin-top: 0.5rem;
     }
-    .chat-assistant {
-        background: #f1f5f9;
+    
+    .metric-delta-positive {
+        background: #dcfce7;
+        color: #166534;
+    }
+    
+    .metric-delta-negative {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+    
+    /* Cards */
+    .custom-card {
+        background: white;
+        border-radius: 16px;
+        padding: 1.5rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        border: 1px solid #e2e8f0;
+        margin-bottom: 1rem;
+    }
+    
+    .card-header {
+        font-size: 1.1rem;
+        font-weight: 600;
         color: #1e293b;
-        padding: 12px 16px;
-        border-radius: 18px 18px 18px 4px;
-        margin: 8px 0;
-        max-width: 80%;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
     }
-    .sql-box {
-        background: #1e293b;
-        color: #e2e8f0;
-        padding: 12px;
+    
+    /* Status badges */
+    .status-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .status-delivered { background: #dcfce7; color: #166534; }
+    .status-processing { background: #dbeafe; color: #1e40af; }
+    .status-rto { background: #fee2e2; color: #991b1b; }
+    .status-cancelled { background: #f3f4f6; color: #374151; }
+    
+    /* Live indicator */
+    .live-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.25rem 0.75rem;
+        background: #dcfce7;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #166534;
+    }
+    
+    .live-dot {
+        width: 8px;
+        height: 8px;
+        background: #22c55e;
+        border-radius: 50%;
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.5; transform: scale(1.2); }
+    }
+    
+    /* Chat styles */
+    .chat-container {
+        max-height: 500px;
+        overflow-y: auto;
+        padding: 1rem;
+        background: #f8fafc;
+        border-radius: 12px;
+    }
+    
+    .chat-message {
+        padding: 1rem;
+        border-radius: 12px;
+        margin-bottom: 1rem;
+        max-width: 85%;
+    }
+    
+    .chat-user {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        margin-left: auto;
+        border-bottom-right-radius: 4px;
+    }
+    
+    .chat-assistant {
+        background: white;
+        border: 1px solid #e2e8f0;
+        margin-right: auto;
+        border-bottom-left-radius: 4px;
+    }
+    
+    /* Navigation */
+    .nav-item {
+        padding: 0.75rem 1rem;
         border-radius: 8px;
-        font-family: monospace;
-        font-size: 0.8rem;
-        margin-top: 8px;
+        margin-bottom: 0.25rem;
+        cursor: pointer;
+        transition: all 0.2s;
     }
+    
+    .nav-item:hover {
+        background: #f1f5f9;
+    }
+    
+    .nav-item-active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+    
+    /* Tables */
+    .dataframe {
+        font-size: 0.875rem;
+    }
+    
+    /* Sidebar */
+    .css-1d391kg {
+        padding-top: 1rem;
+    }
+    
+    /* Hide Streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    
+    /* Tabs styling */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
+        gap: 2rem;
+        background: transparent;
     }
+    
     .stTabs [data-baseweb="tab"] {
-        padding: 10px 20px;
-        border-radius: 8px;
+        height: 50px;
+        padding: 0 1.5rem;
+        background: transparent;
+        border-radius: 8px 8px 0 0;
+        font-weight: 500;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-bottom: none;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -98,755 +261,1051 @@ st.markdown("""
 # SESSION STATE INITIALIZATION
 # =============================================================================
 
-if 'df' not in st.session_state:
-    st.session_state.df = None
-if 'cleaned_df' not in st.session_state:
-    st.session_state.cleaned_df = None
-if 'column_mappings' not in st.session_state:
-    st.session_state.column_mappings = {}
-if 'chat_history' not in st.session_state:
-    st.session_state.chat_history = []
-if 'mappings_confirmed' not in st.session_state:
-    st.session_state.mappings_confirmed = False
-
-# =============================================================================
-# DATA CLEANING FUNCTIONS
-# =============================================================================
-
-def detect_column_type(series: pd.Series, col_name: str) -> str:
-    """Detect the type of a column based on name and content."""
-    col_lower = col_name.lower()
-    
-    # Pattern-based detection
-    patterns = {
-        'order_id': [r'order[_\s]?id', r'order[_\s]?no', r'^id$', r'invoice'],
-        'total_amount': [r'total', r'amount', r'value', r'price', r'revenue', r'grand'],
-        'order_status': [r'status', r'state', r'delivery'],
-        'order_date': [r'date', r'created', r'placed', r'time'],
-        'payment_method': [r'payment', r'pay.*method', r'pay.*mode'],
-        'customer_name': [r'customer.*name', r'name', r'buyer'],
-        'customer_email': [r'email', r'mail'],
-        'city': [r'city', r'town'],
-        'state': [r'state', r'region', r'province'],
-        'product_name': [r'product', r'item', r'sku.*name'],
-        'category': [r'category', r'type', r'department'],
-        'quantity': [r'qty', r'quantity', r'units'],
-        'courier': [r'courier', r'carrier', r'shipping.*partner'],
+def init_session_state():
+    """Initialize all session state variables."""
+    defaults = {
+        'datasets': {},  # {name: {'df': df, 'mappings': {}, 'uploaded_at': datetime}}
+        'active_dataset': None,
+        'chat_history': [],
+        'live_mode': False,
+        'last_refresh': datetime.now(),
+        'theme': 'light',
+        'currency': 'INR',
+        'notifications': [],
     }
     
-    for field_type, field_patterns in patterns.items():
-        for pattern in field_patterns:
-            if re.search(pattern, col_lower):
-                return field_type
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+
+init_session_state()
+
+# =============================================================================
+# UTILITY FUNCTIONS
+# =============================================================================
+
+def format_currency(value: float, currency: str = 'INR') -> str:
+    """Format currency with Indian notation."""
+    if pd.isna(value) or value is None:
+        return "₹0"
     
-    return 'unknown'
+    if currency == 'INR':
+        if abs(value) >= 10000000:
+            return f"₹{value/10000000:.2f} Cr"
+        elif abs(value) >= 100000:
+            return f"₹{value/100000:.2f} L"
+        elif abs(value) >= 1000:
+            return f"₹{value/1000:.1f}K"
+        else:
+            return f"₹{value:,.0f}"
+    else:
+        return f"${value:,.2f}"
 
 
-def clean_dataframe(df: pd.DataFrame, mappings: Dict[str, str]) -> pd.DataFrame:
-    """Clean and standardize the dataframe based on mappings."""
-    df = df.copy()
+def format_number(value: float) -> str:
+    """Format large numbers."""
+    if pd.isna(value):
+        return "0"
+    if abs(value) >= 1000000:
+        return f"{value/1000000:.1f}M"
+    elif abs(value) >= 1000:
+        return f"{value/1000:.1f}K"
+    else:
+        return f"{value:,.0f}"
+
+
+def format_percentage(value: float) -> str:
+    """Format percentage."""
+    if pd.isna(value):
+        return "0%"
+    return f"{value:.1f}%"
+
+
+def get_trend_indicator(current: float, previous: float) -> Tuple[str, str, str]:
+    """Get trend indicator (arrow, color, percentage)."""
+    if previous == 0:
+        return "→", "gray", "0%"
     
-    # Status standardization
-    status_col = mappings.get('order_status')
-    if status_col and status_col in df.columns:
-        status_map = {
-            'delivered': 'delivered', 'completed': 'delivered', 'complete': 'delivered',
-            'fulfilled': 'delivered', 'success': 'delivered',
-            'cancelled': 'cancelled', 'canceled': 'cancelled', 'cancel': 'cancelled',
-            'refunded': 'cancelled',
-            'rto': 'rto', 'returned': 'rto', 'return': 'rto', 'undelivered': 'rto',
-            'return to origin': 'rto', 'failed delivery': 'rto',
-            'processing': 'processing', 'pending': 'processing', 'confirmed': 'processing',
-            'shipped': 'in_transit', 'in transit': 'in_transit', 'dispatched': 'in_transit',
-        }
-        df[status_col] = df[status_col].astype(str).str.lower().str.strip()
-        df[status_col] = df[status_col].map(lambda x: status_map.get(x, x))
+    change = ((current - previous) / previous) * 100
     
-    # Payment method standardization
-    payment_col = mappings.get('payment_method')
-    if payment_col and payment_col in df.columns:
-        payment_map = {
-            'cod': 'COD', 'cash on delivery': 'COD', 'cash': 'COD',
-            'upi': 'UPI', 'gpay': 'UPI', 'phonepe': 'UPI', 'paytm': 'UPI',
-            'credit card': 'Card', 'debit card': 'Card', 'card': 'Card',
-            'net banking': 'Net Banking', 'netbanking': 'Net Banking',
-            'prepaid': 'Prepaid', 'online': 'Prepaid',
-        }
-        df[payment_col] = df[payment_col].astype(str).str.lower().str.strip()
-        df[payment_col] = df[payment_col].map(lambda x: payment_map.get(x, x.title()))
-    
-    # Amount cleaning
-    amount_col = mappings.get('total_amount')
-    if amount_col and amount_col in df.columns:
-        df[amount_col] = df[amount_col].astype(str).str.replace(r'[₹$,Rs\.\s]', '', regex=True)
-        df[amount_col] = pd.to_numeric(df[amount_col], errors='coerce')
-    
-    # Date cleaning
-    date_col = mappings.get('order_date')
-    if date_col and date_col in df.columns:
-        df[date_col] = pd.to_datetime(df[date_col], errors='coerce', infer_datetime_format=True)
-    
-    # Remove duplicates and invalid rows
-    df = df.drop_duplicates()
-    
-    # Remove test orders
-    for col in [mappings.get('customer_email'), mappings.get('customer_name')]:
-        if col and col in df.columns:
-            test_patterns = ['test', 'demo', 'sample', 'dummy']
-            mask = ~df[col].astype(str).str.lower().str.contains('|'.join(test_patterns), na=False)
-            df = df[mask]
-    
-    return df
+    if change > 0:
+        return "↑", "green", f"+{change:.1f}%"
+    elif change < 0:
+        return "↓", "red", f"{change:.1f}%"
+    else:
+        return "→", "gray", "0%"
+
+
+def generate_dataset_id(name: str) -> str:
+    """Generate unique ID for dataset."""
+    return hashlib.md5(f"{name}{datetime.now()}".encode()).hexdigest()[:8]
 
 
 # =============================================================================
-# QUERY ENGINE (Deterministic - No Hallucination)
+# DATA PROCESSING ENGINE
 # =============================================================================
 
-class QueryEngine:
-    """Deterministic query engine for e-commerce analytics."""
+class DataProcessor:
+    """Handles all data processing and cleaning."""
+    
+    STATUS_MAP = {
+        'delivered': 'Delivered', 'completed': 'Delivered', 'complete': 'Delivered',
+        'fulfilled': 'Delivered', 'success': 'Delivered', 'successful': 'Delivered',
+        'cancelled': 'Cancelled', 'canceled': 'Cancelled', 'cancel': 'Cancelled',
+        'refunded': 'Cancelled', 'refund': 'Cancelled',
+        'rto': 'RTO', 'returned': 'RTO', 'return': 'RTO', 'undelivered': 'RTO',
+        'return to origin': 'RTO', 'failed delivery': 'RTO', 'failed': 'RTO',
+        'processing': 'Processing', 'pending': 'Processing', 'confirmed': 'Processing',
+        'new': 'Processing', 'placed': 'Processing',
+        'shipped': 'Shipped', 'in transit': 'Shipped', 'dispatched': 'Shipped',
+        'in_transit': 'Shipped', 'intransit': 'Shipped',
+    }
+    
+    PAYMENT_MAP = {
+        'cod': 'COD', 'cash on delivery': 'COD', 'cash': 'COD',
+        'upi': 'UPI', 'gpay': 'UPI', 'phonepe': 'UPI', 'paytm': 'UPI', 'google pay': 'UPI',
+        'credit card': 'Card', 'debit card': 'Card', 'card': 'Card', 'credit': 'Card', 'debit': 'Card',
+        'net banking': 'Net Banking', 'netbanking': 'Net Banking', 'neft': 'Net Banking',
+        'prepaid': 'Prepaid', 'online': 'Prepaid', 'wallet': 'Prepaid',
+    }
+    
+    @staticmethod
+    def detect_columns(df: pd.DataFrame) -> Dict[str, str]:
+        """Auto-detect column mappings."""
+        patterns = {
+            'order_id': [r'order[_\s]?id', r'order[_\s]?no', r'^id$', r'invoice', r'order[_\s]?number'],
+            'total_amount': [r'total', r'amount', r'value', r'price', r'revenue', r'grand', r'order.*value'],
+            'order_status': [r'status', r'state', r'delivery.*status', r'order.*status'],
+            'order_date': [r'date', r'created', r'placed', r'time', r'order.*date'],
+            'payment_method': [r'payment', r'pay.*method', r'pay.*mode', r'payment.*type'],
+            'customer_name': [r'customer.*name', r'^name$', r'buyer', r'customer$'],
+            'customer_email': [r'email', r'mail', r'customer.*email'],
+            'customer_phone': [r'phone', r'mobile', r'contact'],
+            'city': [r'^city$', r'customer.*city', r'shipping.*city'],
+            'state': [r'^state$', r'region', r'province'],
+            'pincode': [r'pin', r'pincode', r'zip', r'postal'],
+            'product_name': [r'product', r'item', r'sku.*name', r'product.*name'],
+            'category': [r'category', r'type', r'department', r'product.*type'],
+            'quantity': [r'qty', r'quantity', r'units', r'count'],
+            'sku': [r'^sku$', r'product.*id', r'item.*id'],
+            'courier': [r'courier', r'carrier', r'shipping.*partner', r'logistics'],
+            'discount': [r'discount', r'promo', r'coupon'],
+        }
+        
+        detected = {}
+        for col in df.columns:
+            col_lower = col.lower().strip()
+            for field, field_patterns in patterns.items():
+                for pattern in field_patterns:
+                    if re.search(pattern, col_lower):
+                        if field not in detected:
+                            detected[field] = col
+                        break
+        
+        return detected
+    
+    @staticmethod
+    def clean_dataframe(df: pd.DataFrame, mappings: Dict[str, str]) -> Tuple[pd.DataFrame, Dict]:
+        """Clean and standardize dataframe."""
+        df = df.copy()
+        stats = {
+            'original_rows': len(df),
+            'duplicates_removed': 0,
+            'test_orders_removed': 0,
+            'invalid_removed': 0,
+            'dates_fixed': 0,
+            'statuses_standardized': 0,
+        }
+        
+        # Remove duplicates
+        before = len(df)
+        df = df.drop_duplicates()
+        stats['duplicates_removed'] = before - len(df)
+        
+        # Clean status column
+        status_col = mappings.get('order_status')
+        if status_col and status_col in df.columns:
+            df[status_col] = df[status_col].astype(str).str.lower().str.strip()
+            df[status_col] = df[status_col].map(
+                lambda x: DataProcessor.STATUS_MAP.get(x, x.title())
+            )
+            stats['statuses_standardized'] = len(df)
+        
+        # Clean payment column
+        payment_col = mappings.get('payment_method')
+        if payment_col and payment_col in df.columns:
+            df[payment_col] = df[payment_col].astype(str).str.lower().str.strip()
+            df[payment_col] = df[payment_col].map(
+                lambda x: DataProcessor.PAYMENT_MAP.get(x, x.title())
+            )
+        
+        # Clean amount column
+        amount_col = mappings.get('total_amount')
+        if amount_col and amount_col in df.columns:
+            df[amount_col] = df[amount_col].astype(str).str.replace(r'[₹$,Rs\.\s]', '', regex=True)
+            df[amount_col] = pd.to_numeric(df[amount_col], errors='coerce')
+            
+            # Remove negative and extreme values
+            before = len(df)
+            df = df[(df[amount_col] >= 0) | df[amount_col].isna()]
+            stats['invalid_removed'] += before - len(df)
+        
+        # Clean date column
+        date_col = mappings.get('order_date')
+        if date_col and date_col in df.columns:
+            df[date_col] = pd.to_datetime(df[date_col], errors='coerce', infer_datetime_format=True)
+            stats['dates_fixed'] = df[date_col].notna().sum()
+        
+        # Remove test orders
+        test_patterns = ['test', 'demo', 'sample', 'dummy', 'fake']
+        for col in [mappings.get('customer_email'), mappings.get('customer_name')]:
+            if col and col in df.columns:
+                before = len(df)
+                mask = ~df[col].astype(str).str.lower().str.contains('|'.join(test_patterns), na=False)
+                df = df[mask]
+                stats['test_orders_removed'] += before - len(df)
+        
+        stats['final_rows'] = len(df)
+        stats['rows_removed'] = stats['original_rows'] - stats['final_rows']
+        
+        return df, stats
+
+
+# =============================================================================
+# ANALYTICS ENGINE
+# =============================================================================
+
+class AnalyticsEngine:
+    """Production-grade analytics engine with accurate business logic."""
     
     def __init__(self, df: pd.DataFrame, mappings: Dict[str, str]):
         self.df = df
         self.mappings = mappings
     
-    def get_column(self, field: str) -> Optional[str]:
-        """Get actual column name for a standard field."""
+    def _get_col(self, field: str) -> Optional[str]:
+        """Get actual column name for a field."""
         return self.mappings.get(field)
     
-    def execute(self, query_type: str, **kwargs) -> Tuple[Any, str, str]:
-        """
-        Execute a query and return (result, explanation, sql_equivalent).
-        """
-        method_name = f"_query_{query_type}"
-        if hasattr(self, method_name):
-            return getattr(self, method_name)(**kwargs)
-        return None, "Unknown query type", ""
+    def _get_delivered_df(self) -> pd.DataFrame:
+        """Get only delivered orders."""
+        status_col = self._get_col('order_status')
+        if status_col:
+            return self.df[self.df[status_col] == 'Delivered']
+        return self.df
     
-    def _query_total_revenue(self) -> Tuple[float, str, str]:
+    def _get_shipped_df(self) -> pd.DataFrame:
+        """Get shipped orders (delivered + RTO) for RTO calculations."""
+        status_col = self._get_col('order_status')
+        if status_col:
+            return self.df[self.df[status_col].isin(['Delivered', 'RTO'])]
+        return self.df
+    
+    # === KPI CALCULATIONS ===
+    
+    def get_total_revenue(self) -> Dict:
         """Total revenue from delivered orders only."""
-        amount_col = self.get_column('total_amount')
-        status_col = self.get_column('order_status')
+        amount_col = self._get_col('total_amount')
+        delivered = self._get_delivered_df()
         
-        if not amount_col or not status_col:
-            return 0, "Missing required columns", ""
+        revenue = delivered[amount_col].sum() if amount_col else 0
+        order_count = len(delivered)
         
-        delivered = self.df[self.df[status_col] == 'delivered']
-        revenue = delivered[amount_col].sum()
-        
-        sql = f"""SELECT SUM({amount_col}) as revenue
-FROM orders
-WHERE {status_col} = 'delivered'
--- Revenue only counts DELIVERED orders"""
-        
-        return revenue, f"Total revenue from {len(delivered):,} delivered orders", sql
+        return {
+            'value': revenue,
+            'orders': order_count,
+            'label': 'Total Revenue',
+            'description': 'Sum of delivered orders only',
+            'sql': f"SELECT SUM({amount_col}) FROM orders WHERE status = 'Delivered'"
+        }
     
-    def _query_aov(self) -> Tuple[float, str, str]:
-        """Average order value from delivered orders only."""
-        amount_col = self.get_column('total_amount')
-        status_col = self.get_column('order_status')
+    def get_aov(self) -> Dict:
+        """Average order value from delivered orders."""
+        amount_col = self._get_col('total_amount')
+        delivered = self._get_delivered_df()
         
-        if not amount_col or not status_col:
-            return 0, "Missing required columns", ""
+        aov = delivered[amount_col].mean() if amount_col and len(delivered) > 0 else 0
         
-        delivered = self.df[self.df[status_col] == 'delivered']
-        aov = delivered[amount_col].mean()
-        
-        sql = f"""SELECT AVG({amount_col}) as aov
-FROM orders
-WHERE {status_col} = 'delivered'
--- AOV only from DELIVERED orders"""
-        
-        return aov, f"Average order value from {len(delivered):,} delivered orders", sql
+        return {
+            'value': aov,
+            'orders': len(delivered),
+            'label': 'Avg Order Value',
+            'description': 'Average of delivered orders',
+            'sql': f"SELECT AVG({amount_col}) FROM orders WHERE status = 'Delivered'"
+        }
     
-    def _query_order_count(self) -> Tuple[int, str, str]:
-        """Total order count."""
-        return len(self.df), f"Total orders in dataset", "SELECT COUNT(*) FROM orders"
+    def get_order_count(self) -> Dict:
+        """Total order count by status."""
+        status_col = self._get_col('order_status')
+        
+        total = len(self.df)
+        by_status = {}
+        
+        if status_col:
+            by_status = self.df[status_col].value_counts().to_dict()
+        
+        return {
+            'value': total,
+            'by_status': by_status,
+            'label': 'Total Orders',
+            'description': 'All orders in dataset'
+        }
     
-    def _query_rto_rate(self) -> Tuple[Dict, str, str]:
-        """RTO rate with CORRECT denominator (delivered + rto only)."""
-        status_col = self.get_column('order_status')
+    def get_rto_rate(self) -> Dict:
+        """RTO rate with CORRECT denominator (delivered + RTO only)."""
+        status_col = self._get_col('order_status')
         
         if not status_col:
-            return {}, "Missing status column", ""
+            return {'value': 0, 'rto_orders': 0, 'shipped': 0}
         
-        shipped = self.df[self.df[status_col].isin(['delivered', 'rto'])]
-        rto_orders = len(shipped[shipped[status_col] == 'rto'])
+        shipped = self._get_shipped_df()
+        rto_orders = len(shipped[shipped[status_col] == 'RTO'])
         total_shipped = len(shipped)
         
         rate = (rto_orders / total_shipped * 100) if total_shipped > 0 else 0
         
-        sql = f"""SELECT 
-    COUNT(CASE WHEN {status_col} = 'rto' THEN 1 END) as rto_orders,
-    COUNT(*) as shipped_orders,
-    COUNT(CASE WHEN {status_col} = 'rto' THEN 1 END) * 100.0 / COUNT(*) as rto_rate
-FROM orders
-WHERE {status_col} IN ('delivered', 'rto')
--- IMPORTANT: Denominator is shipped orders only (delivered + rto)"""
+        return {
+            'value': rate,
+            'rto_orders': rto_orders,
+            'shipped': total_shipped,
+            'label': 'RTO Rate',
+            'description': 'RTO orders / (Delivered + RTO) × 100',
+            'sql': """SELECT 
+    COUNT(CASE WHEN status = 'RTO' THEN 1 END) * 100.0 / COUNT(*) 
+FROM orders 
+WHERE status IN ('Delivered', 'RTO')"""
+        }
+    
+    def get_customer_count(self) -> Dict:
+        """Unique customer count."""
+        email_col = self._get_col('customer_email')
+        name_col = self._get_col('customer_name')
+        
+        col = email_col or name_col
+        count = self.df[col].nunique() if col else 0
         
         return {
-            'rto_orders': rto_orders,
-            'shipped_orders': total_shipped,
-            'rto_rate': rate
-        }, f"RTO rate based on {total_shipped:,} shipped orders", sql
+            'value': count,
+            'label': 'Unique Customers',
+            'column_used': col
+        }
     
-    def _query_status_breakdown(self) -> Tuple[pd.DataFrame, str, str]:
-        """Orders by status."""
-        status_col = self.get_column('order_status')
+    # === BREAKDOWN ANALYSES ===
+    
+    def get_status_breakdown(self) -> pd.DataFrame:
+        """Orders breakdown by status with revenue."""
+        status_col = self._get_col('order_status')
+        amount_col = self._get_col('total_amount')
         
         if not status_col:
-            return pd.DataFrame(), "Missing status column", ""
+            return pd.DataFrame()
         
-        breakdown = self.df.groupby(status_col).size().reset_index(name='count')
-        breakdown['percentage'] = (breakdown['count'] / len(self.df) * 100).round(2)
+        breakdown = self.df.groupby(status_col).agg({
+            status_col: 'count',
+            amount_col: 'sum' if amount_col else 'count'
+        }).reset_index()
         
-        sql = f"""SELECT {status_col}, COUNT(*) as count,
-       COUNT(*) * 100.0 / SUM(COUNT(*)) OVER() as percentage
-FROM orders
-GROUP BY {status_col}"""
+        breakdown.columns = ['Status', 'Orders', 'Revenue']
+        breakdown['Percentage'] = (breakdown['Orders'] / breakdown['Orders'].sum() * 100).round(1)
+        breakdown = breakdown.sort_values('Orders', ascending=False)
         
-        return breakdown, "Orders breakdown by status", sql
+        return breakdown
     
-    def _query_revenue_by_category(self) -> Tuple[pd.DataFrame, str, str]:
+    def get_payment_breakdown(self) -> pd.DataFrame:
+        """Revenue and orders by payment method."""
+        payment_col = self._get_col('payment_method')
+        amount_col = self._get_col('total_amount')
+        status_col = self._get_col('order_status')
+        
+        if not payment_col:
+            return pd.DataFrame()
+        
+        delivered = self._get_delivered_df()
+        
+        breakdown = delivered.groupby(payment_col).agg({
+            payment_col: 'count',
+            amount_col: ['sum', 'mean'] if amount_col else ['count', 'count']
+        }).reset_index()
+        
+        breakdown.columns = ['Payment Method', 'Orders', 'Revenue', 'AOV']
+        breakdown = breakdown.sort_values('Revenue', ascending=False)
+        
+        return breakdown
+    
+    def get_category_breakdown(self) -> pd.DataFrame:
         """Revenue by category (delivered only)."""
-        amount_col = self.get_column('total_amount')
-        status_col = self.get_column('order_status')
-        category_col = self.get_column('category')
+        category_col = self._get_col('category')
+        amount_col = self._get_col('total_amount')
         
-        if not all([amount_col, status_col, category_col]):
-            return pd.DataFrame(), "Missing required columns", ""
+        if not category_col or not amount_col:
+            return pd.DataFrame()
         
-        delivered = self.df[self.df[status_col] == 'delivered']
-        by_category = delivered.groupby(category_col)[amount_col].sum().reset_index()
-        by_category.columns = ['category', 'revenue']
-        by_category = by_category.sort_values('revenue', ascending=False)
+        delivered = self._get_delivered_df()
         
-        sql = f"""SELECT {category_col}, SUM({amount_col}) as revenue
-FROM orders
-WHERE {status_col} = 'delivered'
-GROUP BY {category_col}
-ORDER BY revenue DESC"""
+        breakdown = delivered.groupby(category_col).agg({
+            amount_col: ['sum', 'count', 'mean']
+        }).reset_index()
         
-        return by_category, "Revenue by category (delivered orders only)", sql
+        breakdown.columns = ['Category', 'Revenue', 'Orders', 'AOV']
+        breakdown = breakdown.sort_values('Revenue', ascending=False)
+        
+        return breakdown
     
-    def _query_top_products(self, limit: int = 10) -> Tuple[pd.DataFrame, str, str]:
+    def get_city_breakdown(self, top_n: int = 10) -> pd.DataFrame:
+        """Revenue by city."""
+        city_col = self._get_col('city')
+        amount_col = self._get_col('total_amount')
+        
+        if not city_col or not amount_col:
+            return pd.DataFrame()
+        
+        delivered = self._get_delivered_df()
+        
+        breakdown = delivered.groupby(city_col).agg({
+            amount_col: ['sum', 'count']
+        }).reset_index()
+        
+        breakdown.columns = ['City', 'Revenue', 'Orders']
+        breakdown = breakdown.sort_values('Revenue', ascending=False).head(top_n)
+        
+        return breakdown
+    
+    def get_top_products(self, top_n: int = 10) -> pd.DataFrame:
         """Top products by revenue."""
-        amount_col = self.get_column('total_amount')
-        status_col = self.get_column('order_status')
-        product_col = self.get_column('product_name')
+        product_col = self._get_col('product_name')
+        amount_col = self._get_col('total_amount')
+        qty_col = self._get_col('quantity')
         
-        if not all([amount_col, status_col, product_col]):
-            return pd.DataFrame(), "Missing required columns", ""
+        if not product_col or not amount_col:
+            return pd.DataFrame()
         
-        delivered = self.df[self.df[status_col] == 'delivered']
-        top = delivered.groupby(product_col).agg({
+        delivered = self._get_delivered_df()
+        
+        agg_dict = {amount_col: 'sum'}
+        if qty_col:
+            agg_dict[qty_col] = 'sum'
+        
+        top = delivered.groupby(product_col).agg(agg_dict).reset_index()
+        
+        if qty_col:
+            top.columns = ['Product', 'Revenue', 'Quantity']
+        else:
+            top.columns = ['Product', 'Revenue']
+            top['Quantity'] = '-'
+        
+        top = top.sort_values('Revenue', ascending=False).head(top_n)
+        
+        return top
+    
+    def get_top_customers(self, top_n: int = 10) -> pd.DataFrame:
+        """Top customers by spending."""
+        customer_col = self._get_col('customer_name') or self._get_col('customer_email')
+        amount_col = self._get_col('total_amount')
+        
+        if not customer_col or not amount_col:
+            return pd.DataFrame()
+        
+        delivered = self._get_delivered_df()
+        
+        top = delivered.groupby(customer_col).agg({
+            amount_col: ['sum', 'count']
+        }).reset_index()
+        
+        top.columns = ['Customer', 'Total Spent', 'Orders']
+        top = top.sort_values('Total Spent', ascending=False).head(top_n)
+        
+        return top
+    
+    # === TIME SERIES ===
+    
+    def get_revenue_trend(self, period: str = 'D') -> pd.DataFrame:
+        """Revenue trend over time."""
+        date_col = self._get_col('order_date')
+        amount_col = self._get_col('total_amount')
+        
+        if not date_col or not amount_col:
+            return pd.DataFrame()
+        
+        delivered = self._get_delivered_df().copy()
+        delivered = delivered[delivered[date_col].notna()]
+        
+        if len(delivered) == 0:
+            return pd.DataFrame()
+        
+        delivered['period'] = delivered[date_col].dt.to_period(period).astype(str)
+        
+        trend = delivered.groupby('period').agg({
             amount_col: 'sum'
         }).reset_index()
-        top.columns = ['product', 'revenue']
-        top = top.sort_values('revenue', ascending=False).head(limit)
         
-        sql = f"""SELECT {product_col}, SUM({amount_col}) as revenue
-FROM orders
-WHERE {status_col} = 'delivered'
-GROUP BY {product_col}
-ORDER BY revenue DESC
-LIMIT {limit}"""
+        trend.columns = ['Period', 'Revenue']
         
-        return top, f"Top {limit} products by revenue", sql
+        return trend
     
-    def _query_cod_vs_prepaid(self) -> Tuple[pd.DataFrame, str, str]:
-        """Compare COD vs Prepaid."""
-        amount_col = self.get_column('total_amount')
-        status_col = self.get_column('order_status')
-        payment_col = self.get_column('payment_method')
+    def get_orders_trend(self, period: str = 'D') -> pd.DataFrame:
+        """Orders trend over time."""
+        date_col = self._get_col('order_date')
+        status_col = self._get_col('order_status')
         
-        if not all([amount_col, status_col, payment_col]):
-            return pd.DataFrame(), "Missing required columns", ""
+        if not date_col:
+            return pd.DataFrame()
         
-        delivered = self.df[self.df[status_col] == 'delivered']
+        df = self.df.copy()
+        df = df[df[date_col].notna()]
         
-        # Group into COD vs Prepaid
-        delivered['payment_type'] = delivered[payment_col].apply(
-            lambda x: 'COD' if x == 'COD' else 'Prepaid'
-        )
+        if len(df) == 0:
+            return pd.DataFrame()
         
-        comparison = delivered.groupby('payment_type').agg({
-            amount_col: ['sum', 'mean', 'count']
-        }).reset_index()
-        comparison.columns = ['payment_type', 'revenue', 'aov', 'orders']
+        df['period'] = df[date_col].dt.to_period(period).astype(str)
         
-        sql = f"""SELECT 
-    CASE WHEN {payment_col} = 'COD' THEN 'COD' ELSE 'Prepaid' END as payment_type,
-    SUM({amount_col}) as revenue,
-    AVG({amount_col}) as aov,
-    COUNT(*) as orders
-FROM orders
-WHERE {status_col} = 'delivered'
-GROUP BY payment_type"""
+        trend = df.groupby('period').size().reset_index(name='Orders')
+        trend.columns = ['Period', 'Orders']
         
-        return comparison, "COD vs Prepaid comparison (delivered orders)", sql
+        return trend
     
-    def _query_rto_by_payment(self) -> Tuple[pd.DataFrame, str, str]:
+    # === RTO ANALYSIS ===
+    
+    def get_rto_by_payment(self) -> pd.DataFrame:
         """RTO rate by payment method."""
-        status_col = self.get_column('order_status')
-        payment_col = self.get_column('payment_method')
+        payment_col = self._get_col('payment_method')
+        status_col = self._get_col('order_status')
         
-        if not all([status_col, payment_col]):
-            return pd.DataFrame(), "Missing required columns", ""
+        if not payment_col or not status_col:
+            return pd.DataFrame()
         
-        shipped = self.df[self.df[status_col].isin(['delivered', 'rto'])]
-        shipped['payment_type'] = shipped[payment_col].apply(
-            lambda x: 'COD' if x == 'COD' else 'Prepaid'
-        )
+        shipped = self._get_shipped_df()
         
-        rto_analysis = shipped.groupby('payment_type').apply(
+        analysis = shipped.groupby(payment_col).apply(
             lambda x: pd.Series({
-                'total_shipped': len(x),
-                'rto_orders': len(x[x[status_col] == 'rto']),
-                'rto_rate': len(x[x[status_col] == 'rto']) / len(x) * 100 if len(x) > 0 else 0
+                'Shipped': len(x),
+                'RTO': len(x[x[status_col] == 'RTO']),
+                'RTO Rate': len(x[x[status_col] == 'RTO']) / len(x) * 100 if len(x) > 0 else 0
             })
         ).reset_index()
         
-        sql = f"""SELECT 
-    CASE WHEN {payment_col} = 'COD' THEN 'COD' ELSE 'Prepaid' END as payment_type,
-    COUNT(*) as total_shipped,
-    COUNT(CASE WHEN {status_col} = 'rto' THEN 1 END) as rto_orders,
-    COUNT(CASE WHEN {status_col} = 'rto' THEN 1 END) * 100.0 / COUNT(*) as rto_rate
-FROM orders
-WHERE {status_col} IN ('delivered', 'rto')
-GROUP BY payment_type"""
+        analysis.columns = ['Payment Method', 'Shipped', 'RTO Orders', 'RTO Rate']
+        analysis = analysis.sort_values('RTO Rate', ascending=False)
         
-        return rto_analysis, "RTO rate by payment method", sql
+        return analysis
     
-    def _query_customer_count(self) -> Tuple[int, str, str]:
-        """Unique customer count."""
-        email_col = self.get_column('customer_email')
-        name_col = self.get_column('customer_name')
+    def get_rto_by_city(self, top_n: int = 10) -> pd.DataFrame:
+        """RTO rate by city."""
+        city_col = self._get_col('city')
+        status_col = self._get_col('order_status')
         
-        col = email_col or name_col
-        if not col:
-            return 0, "Missing customer identifier column", ""
+        if not city_col or not status_col:
+            return pd.DataFrame()
         
-        unique = self.df[col].nunique()
+        shipped = self._get_shipped_df()
         
-        sql = f"SELECT COUNT(DISTINCT {col}) as customers FROM orders"
+        # Only cities with minimum orders
+        city_counts = shipped[city_col].value_counts()
+        valid_cities = city_counts[city_counts >= 5].index
+        shipped = shipped[shipped[city_col].isin(valid_cities)]
         
-        return unique, f"Unique customers based on {col}", sql
+        analysis = shipped.groupby(city_col).apply(
+            lambda x: pd.Series({
+                'Shipped': len(x),
+                'RTO': len(x[x[status_col] == 'RTO']),
+                'RTO Rate': len(x[x[status_col] == 'RTO']) / len(x) * 100 if len(x) > 0 else 0
+            })
+        ).reset_index()
+        
+        analysis.columns = ['City', 'Shipped', 'RTO Orders', 'RTO Rate']
+        analysis = analysis.sort_values('RTO Rate', ascending=False).head(top_n)
+        
+        return analysis
     
-    def _query_top_customers(self, limit: int = 10) -> Tuple[pd.DataFrame, str, str]:
-        """Top customers by spending."""
-        amount_col = self.get_column('total_amount')
-        status_col = self.get_column('order_status')
-        customer_col = self.get_column('customer_name') or self.get_column('customer_email')
-        
-        if not all([amount_col, status_col, customer_col]):
-            return pd.DataFrame(), "Missing required columns", ""
-        
-        delivered = self.df[self.df[status_col] == 'delivered']
-        top = delivered.groupby(customer_col).agg({
-            amount_col: 'sum'
-        }).reset_index()
-        top.columns = ['customer', 'total_spent']
-        top = top.sort_values('total_spent', ascending=False).head(limit)
-        
-        sql = f"""SELECT {customer_col}, SUM({amount_col}) as total_spent
-FROM orders
-WHERE {status_col} = 'delivered'
-GROUP BY {customer_col}
-ORDER BY total_spent DESC
-LIMIT {limit}"""
-        
-        return top, f"Top {limit} customers by spending", sql
+    # === COD VS PREPAID ===
     
-    def _query_revenue_trend(self) -> Tuple[pd.DataFrame, str, str]:
-        """Revenue trend over time."""
-        amount_col = self.get_column('total_amount')
-        status_col = self.get_column('order_status')
-        date_col = self.get_column('order_date')
+    def get_cod_vs_prepaid(self) -> Dict:
+        """Comprehensive COD vs Prepaid comparison."""
+        payment_col = self._get_col('payment_method')
+        amount_col = self._get_col('total_amount')
+        status_col = self._get_col('order_status')
         
-        if not all([amount_col, status_col, date_col]):
-            return pd.DataFrame(), "Missing required columns", ""
+        if not payment_col:
+            return {}
         
-        delivered = self.df[self.df[status_col] == 'delivered'].copy()
-        delivered['month'] = delivered[date_col].dt.to_period('M').astype(str)
+        # Categorize as COD or Prepaid
+        df = self.df.copy()
+        df['payment_type'] = df[payment_col].apply(
+            lambda x: 'COD' if x == 'COD' else 'Prepaid'
+        )
         
-        trend = delivered.groupby('month').agg({
-            amount_col: 'sum'
-        }).reset_index()
-        trend.columns = ['month', 'revenue']
+        result = {}
         
-        sql = f"""SELECT DATE_TRUNC('month', {date_col}) as month, SUM({amount_col}) as revenue
-FROM orders
-WHERE {status_col} = 'delivered'
-GROUP BY month
-ORDER BY month"""
+        for ptype in ['COD', 'Prepaid']:
+            subset = df[df['payment_type'] == ptype]
+            delivered = subset[subset[status_col] == 'Delivered'] if status_col else subset
+            shipped = subset[subset[status_col].isin(['Delivered', 'RTO'])] if status_col else subset
+            
+            result[ptype] = {
+                'total_orders': len(subset),
+                'delivered_orders': len(delivered),
+                'revenue': delivered[amount_col].sum() if amount_col else 0,
+                'aov': delivered[amount_col].mean() if amount_col and len(delivered) > 0 else 0,
+                'rto_rate': (
+                    len(shipped[shipped[status_col] == 'RTO']) / len(shipped) * 100 
+                    if status_col and len(shipped) > 0 else 0
+                )
+            }
         
-        return trend, "Monthly revenue trend", sql
-    
-    def _query_city_breakdown(self) -> Tuple[pd.DataFrame, str, str]:
-        """Revenue by city."""
-        amount_col = self.get_column('total_amount')
-        status_col = self.get_column('order_status')
-        city_col = self.get_column('city')
-        
-        if not all([amount_col, status_col, city_col]):
-            return pd.DataFrame(), "Missing required columns", ""
-        
-        delivered = self.df[self.df[status_col] == 'delivered']
-        by_city = delivered.groupby(city_col).agg({
-            amount_col: ['sum', 'count']
-        }).reset_index()
-        by_city.columns = ['city', 'revenue', 'orders']
-        by_city = by_city.sort_values('revenue', ascending=False).head(15)
-        
-        sql = f"""SELECT {city_col}, SUM({amount_col}) as revenue, COUNT(*) as orders
-FROM orders
-WHERE {status_col} = 'delivered'
-GROUP BY {city_col}
-ORDER BY revenue DESC
-LIMIT 15"""
-        
-        return by_city, "Top 15 cities by revenue", sql
+        return result
 
 
-def parse_user_query(query: str) -> Tuple[str, Dict]:
-    """Parse user's natural language query into query type and params."""
-    query_lower = query.lower()
+# =============================================================================
+# NATURAL LANGUAGE QUERY PARSER
+# =============================================================================
+
+class QueryParser:
+    """Parse natural language queries into analytics functions."""
     
-    # Query patterns
-    patterns = {
-        'total_revenue': [r'total revenue', r'revenue$', r'how much.*made', r'total sales', r'gmv'],
-        'aov': [r'average order value', r'\baov\b', r'avg.*order', r'average.*order'],
-        'order_count': [r'how many orders', r'total orders', r'order count'],
-        'rto_rate': [r'rto rate', r'return.*rate', r'rto percent', r'delivery fail'],
-        'status_breakdown': [r'status breakdown', r'orders by status', r'status wise'],
-        'revenue_by_category': [r'revenue by category', r'category.*revenue', r'category wise'],
-        'top_products': [r'top.*product', r'best.*product', r'best sell'],
-        'cod_vs_prepaid': [r'cod.*prepaid', r'prepaid.*cod', r'cod.*vs', r'compare.*payment'],
-        'rto_by_payment': [r'rto.*payment', r'rto.*cod', r'cod.*rto'],
-        'customer_count': [r'how many customer', r'customer count', r'unique customer'],
-        'top_customers': [r'top.*customer', r'best.*customer'],
-        'revenue_trend': [r'revenue trend', r'revenue.*time', r'monthly revenue', r'revenue.*month'],
-        'city_breakdown': [r'city', r'revenue.*city', r'city.*wise'],
+    QUERY_PATTERNS = {
+        'total_revenue': [
+            r'total revenue', r'revenue$', r'how much.*made', r'total sales', 
+            r'gmv', r'gross.*revenue', r'earnings'
+        ],
+        'aov': [
+            r'average order value', r'\baov\b', r'avg.*order', r'average.*order',
+            r'order.*average', r'basket.*size'
+        ],
+        'order_count': [
+            r'how many orders', r'total orders', r'order count', r'number.*orders'
+        ],
+        'rto_rate': [
+            r'rto rate', r'return.*rate', r'rto percent', r'delivery fail',
+            r'rto.*percent', r'return to origin'
+        ],
+        'status_breakdown': [
+            r'status breakdown', r'orders by status', r'status wise', r'order.*status'
+        ],
+        'category_breakdown': [
+            r'revenue by category', r'category.*revenue', r'category wise',
+            r'category breakdown', r'by category'
+        ],
+        'top_products': [
+            r'top.*product', r'best.*product', r'best sell', r'highest.*product',
+            r'product.*revenue'
+        ],
+        'top_customers': [
+            r'top.*customer', r'best.*customer', r'highest.*customer',
+            r'vip.*customer', r'customer.*spending'
+        ],
+        'cod_vs_prepaid': [
+            r'cod.*prepaid', r'prepaid.*cod', r'cod.*vs', r'compare.*payment',
+            r'payment.*comparison', r'cod.*comparison'
+        ],
+        'rto_by_payment': [
+            r'rto.*payment', r'rto.*cod', r'cod.*rto', r'payment.*rto',
+            r'rto.*by.*payment'
+        ],
+        'rto_by_city': [
+            r'rto.*city', r'city.*rto', r'rto.*location'
+        ],
+        'revenue_trend': [
+            r'revenue trend', r'revenue.*time', r'monthly revenue', r'revenue.*month',
+            r'sales trend', r'daily revenue'
+        ],
+        'city_breakdown': [
+            r'revenue.*city', r'city.*revenue', r'by city', r'top.*city',
+            r'city wise', r'location'
+        ],
+        'payment_breakdown': [
+            r'payment.*breakdown', r'by.*payment', r'payment.*method',
+            r'payment wise'
+        ],
+        'customer_count': [
+            r'how many customer', r'customer count', r'unique customer',
+            r'total customer'
+        ],
+        'summary': [
+            r'summary', r'overview', r'dashboard', r'kpi', r'all metrics'
+        ]
     }
     
-    for query_type, type_patterns in patterns.items():
-        for pattern in type_patterns:
-            if re.search(pattern, query_lower):
-                return query_type, {}
+    @staticmethod
+    def parse(query: str) -> Tuple[str, Dict]:
+        """Parse query into query type and parameters."""
+        query_lower = query.lower().strip()
+        
+        # Check for top N pattern
+        top_n_match = re.search(r'top\s*(\d+)', query_lower)
+        params = {}
+        if top_n_match:
+            params['top_n'] = int(top_n_match.group(1))
+        
+        # Match query type
+        for query_type, patterns in QueryParser.QUERY_PATTERNS.items():
+            for pattern in patterns:
+                if re.search(pattern, query_lower):
+                    return query_type, params
+        
+        return 'unknown', params
+
+
+# =============================================================================
+# VISUALIZATION BUILDER
+# =============================================================================
+
+class ChartBuilder:
+    """Build professional charts with consistent styling."""
     
-    # Default to summary
-    if any(word in query_lower for word in ['summary', 'overview', 'dashboard', 'kpi']):
-        return 'summary', {}
+    COLORS = {
+        'primary': '#667eea',
+        'secondary': '#764ba2',
+        'success': '#22c55e',
+        'warning': '#f59e0b',
+        'danger': '#ef4444',
+        'info': '#3b82f6',
+        'gradient': ['#667eea', '#764ba2', '#ec4899', '#f59e0b', '#22c55e'],
+        'status': {
+            'Delivered': '#22c55e',
+            'Processing': '#3b82f6',
+            'Shipped': '#8b5cf6',
+            'RTO': '#ef4444',
+            'Cancelled': '#6b7280'
+        },
+        'payment': {
+            'COD': '#f59e0b',
+            'Prepaid': '#667eea',
+            'UPI': '#8b5cf6',
+            'Card': '#3b82f6',
+            'Net Banking': '#22c55e'
+        }
+    }
     
-    return 'unknown', {}
+    @staticmethod
+    def create_kpi_card(value: float, label: str, prefix: str = "₹", 
+                        delta: str = None, delta_positive: bool = True) -> str:
+        """Create HTML for KPI card."""
+        formatted_value = format_currency(value) if prefix == "₹" else f"{value:,.0f}"
+        
+        delta_html = ""
+        if delta:
+            delta_class = "metric-delta-positive" if delta_positive else "metric-delta-negative"
+            delta_html = f'<span class="metric-delta {delta_class}">{delta}</span>'
+        
+        return f"""
+        <div class="metric-container">
+            <div class="metric-label">{label}</div>
+            <div class="metric-value">{formatted_value}</div>
+            {delta_html}
+        </div>
+        """
+    
+    @staticmethod
+    def create_area_chart(df: pd.DataFrame, x: str, y: str, 
+                          title: str = None, color: str = None) -> go.Figure:
+        """Create styled area chart."""
+        color = color or ChartBuilder.COLORS['primary']
+        
+        fig = go.Figure()
+        
+        fig.add_trace(go.Scatter(
+            x=df[x],
+            y=df[y],
+            fill='tozeroy',
+            fillcolor=f'rgba(102, 126, 234, 0.2)',
+            line=dict(color=color, width=2),
+            mode='lines'
+        ))
+        
+        fig.update_layout(
+            title=title,
+            xaxis_title="",
+            yaxis_title="",
+            hovermode='x unified',
+            showlegend=False,
+            margin=dict(l=0, r=0, t=30 if title else 0, b=0),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            xaxis=dict(showgrid=False),
+            yaxis=dict(showgrid=True, gridcolor='rgba(0,0,0,0.05)')
+        )
+        
+        return fig
+    
+    @staticmethod
+    def create_bar_chart(df: pd.DataFrame, x: str, y: str, 
+                         title: str = None, horizontal: bool = False,
+                         color_col: str = None) -> go.Figure:
+        """Create styled bar chart."""
+        
+        if color_col and color_col in df.columns:
+            colors = [ChartBuilder.COLORS['status'].get(v, ChartBuilder.COLORS['primary']) 
+                     for v in df[color_col]]
+        else:
+            colors = ChartBuilder.COLORS['primary']
+        
+        if horizontal:
+            fig = go.Figure(go.Bar(
+                y=df[x],
+                x=df[y],
+                orientation='h',
+                marker_color=colors
+            ))
+        else:
+            fig = go.Figure(go.Bar(
+                x=df[x],
+                y=df[y],
+                marker_color=colors
+            ))
+        
+        fig.update_layout(
+            title=title,
+            xaxis_title="",
+            yaxis_title="",
+            showlegend=False,
+            margin=dict(l=0, r=0, t=30 if title else 0, b=0),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            yaxis=dict(categoryorder='total ascending' if horizontal else None)
+        )
+        
+        return fig
+    
+    @staticmethod
+    def create_pie_chart(df: pd.DataFrame, values: str, names: str,
+                         title: str = None, hole: float = 0.4) -> go.Figure:
+        """Create styled donut chart."""
+        
+        colors = [ChartBuilder.COLORS['status'].get(n, ChartBuilder.COLORS['gradient'][i % 5]) 
+                 for i, n in enumerate(df[names])]
+        
+        fig = go.Figure(go.Pie(
+            values=df[values],
+            labels=df[names],
+            hole=hole,
+            marker_colors=colors,
+            textinfo='percent+label',
+            textposition='outside'
+        ))
+        
+        fig.update_layout(
+            title=title,
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="bottom", y=-0.2),
+            margin=dict(l=0, r=0, t=30 if title else 0, b=0),
+            paper_bgcolor='rgba(0,0,0,0)'
+        )
+        
+        return fig
+    
+    @staticmethod
+    def create_comparison_chart(data: Dict, title: str = None) -> go.Figure:
+        """Create COD vs Prepaid comparison chart."""
+        
+        categories = ['Revenue', 'AOV', 'RTO Rate']
+        
+        fig = make_subplots(rows=1, cols=3, subplot_titles=categories)
+        
+        # Revenue comparison
+        fig.add_trace(go.Bar(
+            x=['COD', 'Prepaid'],
+            y=[data['COD']['revenue'], data['Prepaid']['revenue']],
+            marker_color=[ChartBuilder.COLORS['warning'], ChartBuilder.COLORS['primary']],
+            showlegend=False
+        ), row=1, col=1)
+        
+        # AOV comparison
+        fig.add_trace(go.Bar(
+            x=['COD', 'Prepaid'],
+            y=[data['COD']['aov'], data['Prepaid']['aov']],
+            marker_color=[ChartBuilder.COLORS['warning'], ChartBuilder.COLORS['primary']],
+            showlegend=False
+        ), row=1, col=2)
+        
+        # RTO Rate comparison
+        fig.add_trace(go.Bar(
+            x=['COD', 'Prepaid'],
+            y=[data['COD']['rto_rate'], data['Prepaid']['rto_rate']],
+            marker_color=[ChartBuilder.COLORS['danger'], ChartBuilder.COLORS['success']],
+            showlegend=False
+        ), row=1, col=3)
+        
+        fig.update_layout(
+            title=title,
+            showlegend=False,
+            margin=dict(l=0, r=0, t=50, b=0),
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
+        )
+        
+        return fig
 
 
 # =============================================================================
-# VISUALIZATION FUNCTIONS
-# =============================================================================
-
-def format_inr(value: float) -> str:
-    """Format value in Indian Rupees."""
-    if value >= 10000000:
-        return f"₹{value/10000000:.2f} Cr"
-    elif value >= 100000:
-        return f"₹{value/100000:.2f} L"
-    elif value >= 1000:
-        return f"₹{value/1000:.1f}K"
-    else:
-        return f"₹{value:,.2f}"
-
-
-def create_kpi_chart(value: float, title: str, prefix: str = "₹") -> go.Figure:
-    """Create a simple KPI indicator."""
-    fig = go.Figure(go.Indicator(
-        mode="number",
-        value=value,
-        number={'prefix': prefix, 'valueformat': ',.0f'},
-        title={'text': title},
-        domain={'x': [0, 1], 'y': [0, 1]}
-    ))
-    fig.update_layout(
-        height=150,
-        margin=dict(l=20, r=20, t=50, b=20),
-        paper_bgcolor='rgba(0,0,0,0)',
-        font={'color': '#1e293b'}
-    )
-    return fig
-
-
-# =============================================================================
-# MAIN APP
+# MAIN APPLICATION
 # =============================================================================
 
 def main():
+    """Main application entry point."""
+    
     # Sidebar
     with st.sidebar:
-        st.image("https://img.icons8.com/fluency/96/analytics.png", width=60)
-        st.title("E-Commerce Analytics")
-        st.caption("AI-Powered Dashboard")
+        # Logo and branding
+        st.markdown("""
+        <div style="text-align: center; padding: 1rem 0;">
+            <span style="font-size: 2.5rem;">📊</span>
+            <h1 style="font-size: 1.5rem; margin: 0.5rem 0 0 0; 
+                       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                       -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                DataPulse
+            </h1>
+            <p style="color: #64748b; font-size: 0.8rem; margin: 0;">
+                E-Commerce Analytics
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         
         st.divider()
         
         # Navigation
         page = st.radio(
             "Navigation",
-            ["📊 Dashboard", "📁 Upload Data", "🤖 AI Chat", "⚙️ Settings"],
+            ["📊 Dashboard", "📁 Data Manager", "🤖 AI Analyst", "📈 Reports", "⚙️ Settings"],
             label_visibility="collapsed"
         )
         
         st.divider()
         
-        # Dataset info
-        if st.session_state.cleaned_df is not None:
-            st.success(f"✓ Data loaded")
-            st.caption(f"{len(st.session_state.cleaned_df):,} rows")
-            if st.session_state.mappings_confirmed:
-                st.caption(f"{len(st.session_state.column_mappings)} columns mapped")
+        # Active dataset info
+        if st.session_state.datasets:
+            st.markdown("**📂 Datasets**")
+            
+            dataset_names = list(st.session_state.datasets.keys())
+            active = st.selectbox(
+                "Active Dataset",
+                dataset_names,
+                index=dataset_names.index(st.session_state.active_dataset) if st.session_state.active_dataset in dataset_names else 0,
+                label_visibility="collapsed"
+            )
+            st.session_state.active_dataset = active
+            
+            if active:
+                ds = st.session_state.datasets[active]
+                st.caption(f"📋 {len(ds['df']):,} rows")
+                st.caption(f"🔗 {len(ds['mappings'])} fields mapped")
+                
+                # Live mode toggle
+                st.divider()
+                live_mode = st.toggle("🔴 Live Mode", value=st.session_state.live_mode)
+                st.session_state.live_mode = live_mode
+                
+                if live_mode:
+                    st.markdown("""
+                    <div class="live-indicator">
+                        <div class="live-dot"></div>
+                        Auto-refreshing
+                    </div>
+                    """, unsafe_allow_html=True)
         else:
-            st.warning("No data loaded")
-            st.caption("Upload a CSV to start")
+            st.info("No datasets loaded")
+            st.caption("Upload data to get started")
     
-    # Main content based on navigation
-    if page == "📁 Upload Data":
-        render_upload_page()
-    elif page == "🤖 AI Chat":
-        render_chat_page()
+    # Main content routing
+    if page == "📁 Data Manager":
+        render_data_manager()
+    elif page == "🤖 AI Analyst":
+        render_ai_analyst()
+    elif page == "📈 Reports":
+        render_reports()
     elif page == "⚙️ Settings":
-        render_settings_page()
+        render_settings()
     else:
-        render_dashboard_page()
-
-
-def render_upload_page():
-    """Render the data upload page."""
-    st.markdown('<p class="main-header">📁 Upload Data</p>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-header">Upload your e-commerce data to get started</p>', unsafe_allow_html=True)
+        render_dashboard()
     
-    # File uploader
-    uploaded_file = st.file_uploader(
-        "Drop your CSV or Excel file here",
-        type=['csv', 'xlsx', 'xls'],
-        help="Max 50MB, up to 50,000 rows"
-    )
-    
-    if uploaded_file:
-        try:
-            # Read file
-            if uploaded_file.name.endswith('.csv'):
-                df = pd.read_csv(uploaded_file)
-            else:
-                df = pd.read_excel(uploaded_file)
-            
-            st.session_state.df = df
-            
-            # Show preview
-            st.success(f"✓ Loaded {len(df):,} rows and {len(df.columns)} columns")
-            
-            with st.expander("📋 Data Preview", expanded=True):
-                st.dataframe(df.head(10), use_container_width=True)
-            
-            # Column mapping section
-            st.subheader("🔗 Map Your Columns")
-            st.caption("Tell us which columns match our standard fields. This ensures accurate analytics.")
-            
-            # Auto-detect columns
-            detected = {}
-            for col in df.columns:
-                col_type = detect_column_type(df[col], col)
-                if col_type != 'unknown':
-                    detected[col_type] = col
-            
-            # Required fields
-            st.markdown("**Required Fields** (must be mapped)")
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                order_id_col = st.selectbox(
-                    "Order ID *",
-                    options=[''] + list(df.columns),
-                    index=list(df.columns).index(detected.get('order_id', '')) + 1 if detected.get('order_id') in df.columns else 0,
-                    help="Unique identifier for each order"
-                )
-            
-            with col2:
-                amount_col = st.selectbox(
-                    "Order Amount *",
-                    options=[''] + list(df.columns),
-                    index=list(df.columns).index(detected.get('total_amount', '')) + 1 if detected.get('total_amount') in df.columns else 0,
-                    help="Total order value"
-                )
-            
-            with col3:
-                status_col = st.selectbox(
-                    "Order Status *",
-                    options=[''] + list(df.columns),
-                    index=list(df.columns).index(detected.get('order_status', '')) + 1 if detected.get('order_status') in df.columns else 0,
-                    help="Delivery status (Delivered, Cancelled, RTO, etc.)"
-                )
-            
-            # Optional fields
-            st.markdown("**Optional Fields** (for deeper insights)")
-            
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                date_col = st.selectbox(
-                    "Order Date",
-                    options=[''] + list(df.columns),
-                    index=list(df.columns).index(detected.get('order_date', '')) + 1 if detected.get('order_date') in df.columns else 0
-                )
-            
-            with col2:
-                payment_col = st.selectbox(
-                    "Payment Method",
-                    options=[''] + list(df.columns),
-                    index=list(df.columns).index(detected.get('payment_method', '')) + 1 if detected.get('payment_method') in df.columns else 0
-                )
-            
-            with col3:
-                customer_col = st.selectbox(
-                    "Customer Name",
-                    options=[''] + list(df.columns),
-                    index=list(df.columns).index(detected.get('customer_name', '')) + 1 if detected.get('customer_name') in df.columns else 0
-                )
-            
-            with col4:
-                category_col = st.selectbox(
-                    "Category",
-                    options=[''] + list(df.columns),
-                    index=list(df.columns).index(detected.get('category', '')) + 1 if detected.get('category') in df.columns else 0
-                )
-            
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                city_col = st.selectbox(
-                    "City",
-                    options=[''] + list(df.columns),
-                    index=list(df.columns).index(detected.get('city', '')) + 1 if detected.get('city') in df.columns else 0
-                )
-            
-            with col2:
-                product_col = st.selectbox(
-                    "Product Name",
-                    options=[''] + list(df.columns),
-                    index=list(df.columns).index(detected.get('product_name', '')) + 1 if detected.get('product_name') in df.columns else 0
-                )
-            
-            with col3:
-                email_col = st.selectbox(
-                    "Customer Email",
-                    options=[''] + list(df.columns),
-                    index=list(df.columns).index(detected.get('customer_email', '')) + 1 if detected.get('customer_email') in df.columns else 0
-                )
-            
-            with col4:
-                courier_col = st.selectbox(
-                    "Courier",
-                    options=[''] + list(df.columns),
-                    index=list(df.columns).index(detected.get('courier', '')) + 1 if detected.get('courier') in df.columns else 0
-                )
-            
-            # Validate and save
-            if st.button("✓ Confirm & Clean Data", type="primary", use_container_width=True):
-                # Validate required fields
-                if not order_id_col or not amount_col or not status_col:
-                    st.error("Please map all required fields (Order ID, Order Amount, Order Status)")
-                else:
-                    # Build mappings
-                    mappings = {
-                        'order_id': order_id_col,
-                        'total_amount': amount_col,
-                        'order_status': status_col,
-                    }
-                    if date_col: mappings['order_date'] = date_col
-                    if payment_col: mappings['payment_method'] = payment_col
-                    if customer_col: mappings['customer_name'] = customer_col
-                    if category_col: mappings['category'] = category_col
-                    if city_col: mappings['city'] = city_col
-                    if product_col: mappings['product_name'] = product_col
-                    if email_col: mappings['customer_email'] = email_col
-                    if courier_col: mappings['courier'] = courier_col
-                    
-                    # Clean data
-                    with st.spinner("Cleaning data..."):
-                        cleaned = clean_dataframe(df, mappings)
-                        
-                        st.session_state.cleaned_df = cleaned
-                        st.session_state.column_mappings = mappings
-                        st.session_state.mappings_confirmed = True
-                    
-                    # Show cleaning report
-                    removed = len(df) - len(cleaned)
-                    st.success(f"""
-                    ✓ Data cleaned successfully!
-                    - Original rows: {len(df):,}
-                    - Cleaned rows: {len(cleaned):,}
-                    - Removed: {removed:,} rows (duplicates, test orders, invalid)
-                    """)
-                    
-                    st.balloons()
-                    st.info("Go to **Dashboard** to see your analytics!")
-        
-        except Exception as e:
-            st.error(f"Error reading file: {str(e)}")
+    # Auto-refresh for live mode
+    if st.session_state.live_mode and st.session_state.active_dataset:
+        time.sleep(5)
+        st.rerun()
 
 
-def render_dashboard_page():
+def render_dashboard():
     """Render the main dashboard."""
-    st.markdown('<p class="main-header">📊 Dashboard</p>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-header">Real-time analytics from your data</p>', unsafe_allow_html=True)
     
-    if st.session_state.cleaned_df is None or not st.session_state.mappings_confirmed:
-        st.warning("⚠️ No data loaded. Please upload a CSV file first.")
-        if st.button("Go to Upload Page"):
-            st.rerun()
+    st.markdown('<p class="main-title">📊 Analytics Dashboard</p>', unsafe_allow_html=True)
+    
+    if not st.session_state.active_dataset or st.session_state.active_dataset not in st.session_state.datasets:
+        st.warning("⚠️ No dataset selected. Please upload data first.")
+        
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.markdown("""
+            <div class="custom-card" style="text-align: center; padding: 3rem;">
+                <span style="font-size: 4rem;">📁</span>
+                <h2 style="margin: 1rem 0;">Upload Your Data</h2>
+                <p style="color: #64748b;">
+                    Start by uploading your e-commerce data (CSV or Excel).
+                    We'll automatically detect columns and clean your data.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if st.button("📁 Go to Data Manager", use_container_width=True, type="primary"):
+                st.session_state.page = "📁 Data Manager"
+                st.rerun()
         return
     
-    df = st.session_state.cleaned_df
-    mappings = st.session_state.column_mappings
-    engine = QueryEngine(df, mappings)
+    # Get data and engine
+    ds = st.session_state.datasets[st.session_state.active_dataset]
+    df = ds['df']
+    mappings = ds['mappings']
+    engine = AnalyticsEngine(df, mappings)
+    
+    # Live indicator
+    if st.session_state.live_mode:
+        st.markdown("""
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
+            <div class="live-indicator">
+                <div class="live-dot"></div>
+                Live
+            </div>
+            <span style="color: #64748b; font-size: 0.8rem;">
+                Last updated: """ + datetime.now().strftime("%H:%M:%S") + """
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
     
     # KPI Row
+    st.markdown("### 📈 Key Metrics")
+    
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        revenue, _, _ = engine.execute('total_revenue')
+        revenue_data = engine.get_total_revenue()
         st.metric(
-            label="Total Revenue",
-            value=format_inr(revenue or 0),
-            delta="Delivered orders only",
+            "Total Revenue",
+            format_currency(revenue_data['value']),
+            f"{revenue_data['orders']:,} delivered orders",
             delta_color="off"
         )
     
     with col2:
-        aov, _, _ = engine.execute('aov')
+        aov_data = engine.get_aov()
         st.metric(
-            label="Average Order Value",
-            value=format_inr(aov or 0),
-            delta="Delivered orders only",
+            "Average Order Value",
+            format_currency(aov_data['value']),
+            "Delivered orders only",
             delta_color="off"
         )
     
     with col3:
-        orders, _, _ = engine.execute('order_count')
+        order_data = engine.get_order_count()
         st.metric(
-            label="Total Orders",
-            value=f"{orders:,}",
-            delta="All orders"
+            "Total Orders",
+            format_number(order_data['value']),
+            f"{len(order_data.get('by_status', {}))} statuses"
         )
     
     with col4:
-        rto_data, _, _ = engine.execute('rto_rate')
-        rto_rate = rto_data.get('rto_rate', 0) if isinstance(rto_data, dict) else 0
+        rto_data = engine.get_rto_rate()
+        color = "inverse" if rto_data['value'] > 10 else "normal"
         st.metric(
-            label="RTO Rate",
-            value=f"{rto_rate:.2f}%",
-            delta=f"{rto_data.get('rto_orders', 0):,} returns" if isinstance(rto_data, dict) else "",
-            delta_color="inverse"
+            "RTO Rate",
+            format_percentage(rto_data['value']),
+            f"{rto_data['rto_orders']:,} returns",
+            delta_color=color
         )
     
     st.divider()
@@ -855,286 +1314,762 @@ def render_dashboard_page():
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("📈 Revenue Trend")
-        trend_df, _, _ = engine.execute('revenue_trend')
-        if isinstance(trend_df, pd.DataFrame) and not trend_df.empty:
-            fig = px.area(
-                trend_df, x='month', y='revenue',
-                color_discrete_sequence=['#3b82f6']
-            )
-            fig.update_layout(
-                xaxis_title="",
-                yaxis_title="Revenue (₹)",
-                showlegend=False,
-                margin=dict(l=0, r=0, t=10, b=0)
-            )
+        st.markdown("#### 📈 Revenue Trend")
+        trend_df = engine.get_revenue_trend(period='D')
+        if not trend_df.empty:
+            fig = ChartBuilder.create_area_chart(trend_df, 'Period', 'Revenue')
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("Date column required for trend analysis")
     
     with col2:
-        st.subheader("🥧 Orders by Status")
-        status_df, _, _ = engine.execute('status_breakdown')
-        if isinstance(status_df, pd.DataFrame) and not status_df.empty:
-            fig = px.pie(
-                status_df, values='count', names=mappings.get('order_status', 'status'),
-                color_discrete_sequence=px.colors.qualitative.Set2
-            )
-            fig.update_layout(margin=dict(l=0, r=0, t=10, b=0))
+        st.markdown("#### 🥧 Orders by Status")
+        status_df = engine.get_status_breakdown()
+        if not status_df.empty:
+            fig = ChartBuilder.create_pie_chart(status_df, 'Orders', 'Status')
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("No status data available")
+            st.info("Status column required")
     
     # Charts Row 2
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("🏆 Top Products")
-        top_products, _, _ = engine.execute('top_products', limit=10)
-        if isinstance(top_products, pd.DataFrame) and not top_products.empty:
-            fig = px.bar(
-                top_products.head(10), x='revenue', y='product',
-                orientation='h',
-                color_discrete_sequence=['#10b981']
-            )
-            fig.update_layout(
-                xaxis_title="Revenue (₹)",
-                yaxis_title="",
-                yaxis={'categoryorder': 'total ascending'},
-                margin=dict(l=0, r=0, t=10, b=0)
+        st.markdown("#### 🏆 Top 10 Products")
+        products_df = engine.get_top_products(10)
+        if not products_df.empty:
+            fig = ChartBuilder.create_bar_chart(
+                products_df, 'Product', 'Revenue', horizontal=True
             )
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("Product column required")
     
     with col2:
-        st.subheader("💳 COD vs Prepaid")
-        comparison, _, _ = engine.execute('cod_vs_prepaid')
-        if isinstance(comparison, pd.DataFrame) and not comparison.empty:
-            fig = px.bar(
-                comparison, x='payment_type', y='revenue',
-                color='payment_type',
-                color_discrete_map={'COD': '#f59e0b', 'Prepaid': '#3b82f6'}
-            )
-            fig.update_layout(
-                xaxis_title="",
-                yaxis_title="Revenue (₹)",
-                showlegend=False,
-                margin=dict(l=0, r=0, t=10, b=0)
+        st.markdown("#### 💳 Payment Methods")
+        payment_df = engine.get_payment_breakdown()
+        if not payment_df.empty:
+            fig = ChartBuilder.create_bar_chart(
+                payment_df, 'Payment Method', 'Revenue'
             )
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("Payment method column required")
     
-    # RTO Analysis
-    st.subheader("🔄 RTO Analysis by Payment Method")
-    rto_payment, _, _ = engine.execute('rto_by_payment')
-    if isinstance(rto_payment, pd.DataFrame) and not rto_payment.empty:
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            fig = px.bar(
-                rto_payment, x='payment_type', y='rto_rate',
-                color='payment_type',
-                color_discrete_map={'COD': '#ef4444', 'Prepaid': '#22c55e'}
-            )
-            fig.update_layout(
-                xaxis_title="",
-                yaxis_title="RTO Rate (%)",
-                showlegend=False
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        with col2:
-            st.markdown("**Key Insight:**")
-            if len(rto_payment) > 1:
-                cod_rto = rto_payment[rto_payment['payment_type'] == 'COD']['rto_rate'].values
-                prepaid_rto = rto_payment[rto_payment['payment_type'] == 'Prepaid']['rto_rate'].values
-                if len(cod_rto) > 0 and len(prepaid_rto) > 0:
-                    diff = cod_rto[0] - prepaid_rto[0]
-                    if diff > 0:
-                        st.warning(f"COD has {diff:.1f}% higher RTO than Prepaid")
-                    else:
-                        st.success(f"Prepaid has {abs(diff):.1f}% higher RTO than COD")
-    else:
-        st.info("Payment method and status columns required for RTO analysis")
-
-
-def render_chat_page():
-    """Render the AI chat page."""
-    st.markdown('<p class="main-header">🤖 AI Chat</p>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-header">Ask questions about your data in plain English</p>', unsafe_allow_html=True)
+    # COD vs Prepaid Analysis
+    st.divider()
+    st.markdown("### 💰 COD vs Prepaid Analysis")
     
-    if st.session_state.cleaned_df is None or not st.session_state.mappings_confirmed:
-        st.warning("⚠️ No data loaded. Please upload a CSV file first.")
+    comparison = engine.get_cod_vs_prepaid()
+    if comparison:
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.markdown("**Revenue**")
+            cod_rev = comparison['COD']['revenue']
+            prepaid_rev = comparison['Prepaid']['revenue']
+            total = cod_rev + prepaid_rev
+            
+            st.metric("COD", format_currency(cod_rev), f"{cod_rev/total*100:.1f}%" if total > 0 else "0%")
+            st.metric("Prepaid", format_currency(prepaid_rev), f"{prepaid_rev/total*100:.1f}%" if total > 0 else "0%")
+        
+        with col2:
+            st.markdown("**Average Order Value**")
+            st.metric("COD AOV", format_currency(comparison['COD']['aov']))
+            st.metric("Prepaid AOV", format_currency(comparison['Prepaid']['aov']))
+        
+        with col3:
+            st.markdown("**RTO Rate**")
+            cod_rto = comparison['COD']['rto_rate']
+            prepaid_rto = comparison['Prepaid']['rto_rate']
+            
+            st.metric("COD RTO", f"{cod_rto:.1f}%", delta_color="inverse")
+            st.metric("Prepaid RTO", f"{prepaid_rto:.1f}%")
+            
+            if cod_rto > prepaid_rto:
+                st.warning(f"⚠️ COD has {cod_rto - prepaid_rto:.1f}% higher RTO than Prepaid")
+            else:
+                st.success("✓ Prepaid has higher RTO (unusual)")
+    
+    # RTO by City
+    st.divider()
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("#### 🔄 RTO Rate by Payment")
+        rto_payment = engine.get_rto_by_payment()
+        if not rto_payment.empty:
+            fig = px.bar(
+                rto_payment, x='Payment Method', y='RTO Rate',
+                color='RTO Rate',
+                color_continuous_scale=['#22c55e', '#f59e0b', '#ef4444']
+            )
+            fig.update_layout(showlegend=False, coloraxis_showscale=False)
+            st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        st.markdown("#### 🏙️ Top Cities by RTO")
+        rto_city = engine.get_rto_by_city(10)
+        if not rto_city.empty:
+            fig = px.bar(
+                rto_city, x='City', y='RTO Rate',
+                color='RTO Rate',
+                color_continuous_scale=['#22c55e', '#f59e0b', '#ef4444']
+            )
+            fig.update_layout(showlegend=False, coloraxis_showscale=False)
+            st.plotly_chart(fig, use_container_width=True)
+    
+    # Category breakdown
+    st.divider()
+    st.markdown("### 📦 Category Performance")
+    
+    category_df = engine.get_category_breakdown()
+    if not category_df.empty:
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            fig = px.treemap(
+                category_df,
+                path=['Category'],
+                values='Revenue',
+                color='Revenue',
+                color_continuous_scale='Blues'
+            )
+            fig.update_layout(margin=dict(l=0, r=0, t=0, b=0))
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            st.dataframe(
+                category_df[['Category', 'Revenue', 'Orders']].style.format({
+                    'Revenue': lambda x: format_currency(x),
+                    'Orders': '{:,.0f}'
+                }),
+                use_container_width=True,
+                hide_index=True
+            )
+    else:
+        st.info("Category column required for this analysis")
+
+
+def render_data_manager():
+    """Render the data manager page."""
+    
+    st.markdown('<p class="main-title">📁 Data Manager</p>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-title">Upload, manage, and configure your datasets</p>', unsafe_allow_html=True)
+    
+    tab1, tab2 = st.tabs(["📤 Upload New", "📋 Manage Datasets"])
+    
+    with tab1:
+        st.markdown("### Upload Dataset")
+        
+        uploaded_file = st.file_uploader(
+            "Drop your CSV or Excel file",
+            type=['csv', 'xlsx', 'xls'],
+            help="Max 50MB, up to 100,000 rows"
+        )
+        
+        if uploaded_file:
+            try:
+                # Read file
+                if uploaded_file.name.endswith('.csv'):
+                    df = pd.read_csv(uploaded_file)
+                else:
+                    df = pd.read_excel(uploaded_file)
+                
+                st.success(f"✓ Loaded {len(df):,} rows and {len(df.columns)} columns")
+                
+                # Preview
+                with st.expander("📋 Data Preview", expanded=True):
+                    st.dataframe(df.head(10), use_container_width=True)
+                
+                # Auto-detect columns
+                detected = DataProcessor.detect_columns(df)
+                
+                st.markdown("### 🔗 Column Mapping")
+                st.caption("Map your columns to standard e-commerce fields")
+                
+                # Required fields
+                st.markdown("**Required Fields**")
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    order_id = st.selectbox(
+                        "Order ID *",
+                        [''] + list(df.columns),
+                        index=list(df.columns).index(detected.get('order_id', '')) + 1 
+                              if detected.get('order_id') in df.columns else 0
+                    )
+                
+                with col2:
+                    amount = st.selectbox(
+                        "Order Amount *",
+                        [''] + list(df.columns),
+                        index=list(df.columns).index(detected.get('total_amount', '')) + 1 
+                              if detected.get('total_amount') in df.columns else 0
+                    )
+                
+                with col3:
+                    status = st.selectbox(
+                        "Order Status *",
+                        [''] + list(df.columns),
+                        index=list(df.columns).index(detected.get('order_status', '')) + 1 
+                              if detected.get('order_status') in df.columns else 0
+                    )
+                
+                # Optional fields
+                st.markdown("**Optional Fields**")
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    date = st.selectbox(
+                        "Order Date",
+                        [''] + list(df.columns),
+                        index=list(df.columns).index(detected.get('order_date', '')) + 1 
+                              if detected.get('order_date') in df.columns else 0
+                    )
+                
+                with col2:
+                    payment = st.selectbox(
+                        "Payment Method",
+                        [''] + list(df.columns),
+                        index=list(df.columns).index(detected.get('payment_method', '')) + 1 
+                              if detected.get('payment_method') in df.columns else 0
+                    )
+                
+                with col3:
+                    customer = st.selectbox(
+                        "Customer Name",
+                        [''] + list(df.columns),
+                        index=list(df.columns).index(detected.get('customer_name', '')) + 1 
+                              if detected.get('customer_name') in df.columns else 0
+                    )
+                
+                with col4:
+                    category = st.selectbox(
+                        "Category",
+                        [''] + list(df.columns),
+                        index=list(df.columns).index(detected.get('category', '')) + 1 
+                              if detected.get('category') in df.columns else 0
+                    )
+                
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    product = st.selectbox(
+                        "Product Name",
+                        [''] + list(df.columns),
+                        index=list(df.columns).index(detected.get('product_name', '')) + 1 
+                              if detected.get('product_name') in df.columns else 0
+                    )
+                
+                with col2:
+                    city = st.selectbox(
+                        "City",
+                        [''] + list(df.columns),
+                        index=list(df.columns).index(detected.get('city', '')) + 1 
+                              if detected.get('city') in df.columns else 0
+                    )
+                
+                with col3:
+                    email = st.selectbox(
+                        "Customer Email",
+                        [''] + list(df.columns),
+                        index=list(df.columns).index(detected.get('customer_email', '')) + 1 
+                              if detected.get('customer_email') in df.columns else 0
+                    )
+                
+                with col4:
+                    courier = st.selectbox(
+                        "Courier",
+                        [''] + list(df.columns),
+                        index=list(df.columns).index(detected.get('courier', '')) + 1 
+                              if detected.get('courier') in df.columns else 0
+                    )
+                
+                # Dataset name
+                st.markdown("### 📝 Dataset Name")
+                dataset_name = st.text_input(
+                    "Name",
+                    value=uploaded_file.name.replace('.csv', '').replace('.xlsx', ''),
+                    label_visibility="collapsed"
+                )
+                
+                # Import button
+                if st.button("✓ Import Dataset", type="primary", use_container_width=True):
+                    if not order_id or not amount or not status:
+                        st.error("Please map all required fields")
+                    elif not dataset_name:
+                        st.error("Please enter a dataset name")
+                    else:
+                        # Build mappings
+                        mappings = {'order_id': order_id, 'total_amount': amount, 'order_status': status}
+                        if date: mappings['order_date'] = date
+                        if payment: mappings['payment_method'] = payment
+                        if customer: mappings['customer_name'] = customer
+                        if category: mappings['category'] = category
+                        if product: mappings['product_name'] = product
+                        if city: mappings['city'] = city
+                        if email: mappings['customer_email'] = email
+                        if courier: mappings['courier'] = courier
+                        
+                        # Clean data
+                        with st.spinner("Cleaning and processing data..."):
+                            cleaned_df, stats = DataProcessor.clean_dataframe(df, mappings)
+                        
+                        # Store dataset
+                        st.session_state.datasets[dataset_name] = {
+                            'df': cleaned_df,
+                            'mappings': mappings,
+                            'uploaded_at': datetime.now(),
+                            'original_rows': stats['original_rows'],
+                            'cleaning_stats': stats
+                        }
+                        st.session_state.active_dataset = dataset_name
+                        
+                        # Show success
+                        st.success(f"""
+                        ✓ Dataset imported successfully!
+                        
+                        **Cleaning Report:**
+                        - Original rows: {stats['original_rows']:,}
+                        - Final rows: {stats['final_rows']:,}
+                        - Duplicates removed: {stats['duplicates_removed']:,}
+                        - Test orders removed: {stats['test_orders_removed']:,}
+                        - Invalid rows removed: {stats['invalid_removed']:,}
+                        """)
+                        
+                        st.balloons()
+            
+            except Exception as e:
+                st.error(f"Error reading file: {str(e)}")
+    
+    with tab2:
+        if not st.session_state.datasets:
+            st.info("No datasets uploaded yet")
+        else:
+            for name, ds in st.session_state.datasets.items():
+                with st.expander(f"📊 {name}", expanded=name == st.session_state.active_dataset):
+                    col1, col2, col3 = st.columns([2, 1, 1])
+                    
+                    with col1:
+                        st.markdown(f"**Rows:** {len(ds['df']):,}")
+                        st.markdown(f"**Uploaded:** {ds['uploaded_at'].strftime('%Y-%m-%d %H:%M')}")
+                        st.markdown(f"**Mapped Fields:** {len(ds['mappings'])}")
+                    
+                    with col2:
+                        if st.button("Set Active", key=f"active_{name}"):
+                            st.session_state.active_dataset = name
+                            st.rerun()
+                    
+                    with col3:
+                        if st.button("🗑️ Delete", key=f"delete_{name}"):
+                            del st.session_state.datasets[name]
+                            if st.session_state.active_dataset == name:
+                                st.session_state.active_dataset = list(st.session_state.datasets.keys())[0] if st.session_state.datasets else None
+                            st.rerun()
+                    
+                    # Show mappings
+                    st.markdown("**Column Mappings:**")
+                    mapping_df = pd.DataFrame([
+                        {'Field': k.replace('_', ' ').title(), 'Column': v}
+                        for k, v in ds['mappings'].items()
+                    ])
+                    st.dataframe(mapping_df, use_container_width=True, hide_index=True)
+
+
+def render_ai_analyst():
+    """Render the AI analyst chat page."""
+    
+    st.markdown('<p class="main-title">🤖 AI Analyst</p>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-title">Ask questions about your data in natural language</p>', unsafe_allow_html=True)
+    
+    if not st.session_state.active_dataset or st.session_state.active_dataset not in st.session_state.datasets:
+        st.warning("Please upload and select a dataset first")
         return
     
-    df = st.session_state.cleaned_df
-    mappings = st.session_state.column_mappings
-    engine = QueryEngine(df, mappings)
+    ds = st.session_state.datasets[st.session_state.active_dataset]
+    engine = AnalyticsEngine(ds['df'], ds['mappings'])
     
     # Suggested questions
-    st.markdown("**Try asking:**")
+    st.markdown("**💡 Try asking:**")
+    
     suggestions = [
         "What is my total revenue?",
-        "What is my RTO rate?",
-        "Show COD vs Prepaid comparison",
+        "Show RTO rate by payment method",
         "Top 10 products",
+        "COD vs Prepaid comparison",
         "Revenue by category",
-        "RTO rate by payment method"
+        "RTO rate by city"
     ]
     
     cols = st.columns(3)
-    for i, suggestion in enumerate(suggestions):
+    for i, sugg in enumerate(suggestions):
         with cols[i % 3]:
-            if st.button(suggestion, key=f"suggest_{i}", use_container_width=True):
-                st.session_state.chat_history.append({
-                    'role': 'user',
-                    'content': suggestion
-                })
+            if st.button(sugg, key=f"sugg_{i}", use_container_width=True):
+                st.session_state.chat_history.append({'role': 'user', 'content': sugg})
+                
                 # Process query
-                query_type, params = parse_user_query(suggestion)
-                if query_type != 'unknown':
-                    result, explanation, sql = engine.execute(query_type, **params)
-                    st.session_state.chat_history.append({
-                        'role': 'assistant',
-                        'content': explanation,
-                        'result': result,
-                        'sql': sql
-                    })
-                else:
-                    st.session_state.chat_history.append({
-                        'role': 'assistant',
-                        'content': "I couldn't understand that question. Try asking about revenue, orders, RTO rate, or products."
-                    })
+                query_type, params = QueryParser.parse(sugg)
+                response = process_query(engine, query_type, params)
+                st.session_state.chat_history.append(response)
                 st.rerun()
     
     st.divider()
     
     # Chat history
-    for msg in st.session_state.chat_history:
-        with st.chat_message(msg['role']):
-            st.write(msg['content'])
-            
-            if msg['role'] == 'assistant' and 'result' in msg:
-                result = msg['result']
-                
-                # Display result based on type
-                if isinstance(result, pd.DataFrame) and not result.empty:
-                    st.dataframe(result, use_container_width=True)
-                    
-                    # Visualize if possible
-                    if len(result.columns) >= 2:
-                        num_cols = result.select_dtypes(include=['number']).columns
-                        cat_cols = result.select_dtypes(exclude=['number']).columns
-                        
-                        if len(num_cols) > 0 and len(cat_cols) > 0:
-                            fig = px.bar(result, x=cat_cols[0], y=num_cols[0])
-                            st.plotly_chart(fig, use_container_width=True)
-                
-                elif isinstance(result, dict):
-                    for key, value in result.items():
-                        if isinstance(value, (int, float)):
-                            st.metric(key.replace('_', ' ').title(), 
-                                     format_inr(value) if 'revenue' in key or 'amount' in key else f"{value:,.2f}")
-                
-                elif isinstance(result, (int, float)):
-                    st.metric("Result", format_inr(result) if result > 100 else f"{result:,.2f}")
-                
-                # Show SQL
-                if msg.get('sql'):
-                    with st.expander("🔍 View SQL Query"):
-                        st.code(msg['sql'], language='sql')
+    chat_container = st.container()
     
-    # Chat input
+    with chat_container:
+        for msg in st.session_state.chat_history:
+            with st.chat_message(msg['role']):
+                st.write(msg['content'])
+                
+                if msg['role'] == 'assistant':
+                    if 'data' in msg and msg['data'] is not None:
+                        if isinstance(msg['data'], pd.DataFrame) and not msg['data'].empty:
+                            st.dataframe(msg['data'], use_container_width=True, hide_index=True)
+                        elif isinstance(msg['data'], dict):
+                            for key, val in msg['data'].items():
+                                if isinstance(val, (int, float)):
+                                    st.metric(key.replace('_', ' ').title(), 
+                                             format_currency(val) if 'revenue' in key.lower() or 'amount' in key.lower() 
+                                             else format_number(val) if val > 100 else f"{val:.2f}")
+                    
+                    if 'chart' in msg and msg['chart'] is not None:
+                        st.plotly_chart(msg['chart'], use_container_width=True)
+                    
+                    if 'sql' in msg and msg['sql']:
+                        with st.expander("🔍 View Query Logic"):
+                            st.code(msg['sql'], language='sql')
+    
+    # Input
     if prompt := st.chat_input("Ask about your data..."):
-        st.session_state.chat_history.append({
-            'role': 'user',
-            'content': prompt
-        })
+        st.session_state.chat_history.append({'role': 'user', 'content': prompt})
         
-        # Process query
-        query_type, params = parse_user_query(prompt)
-        
-        if query_type != 'unknown':
-            result, explanation, sql = engine.execute(query_type, **params)
-            st.session_state.chat_history.append({
-                'role': 'assistant',
-                'content': explanation,
-                'result': result,
-                'sql': sql
-            })
-        else:
-            st.session_state.chat_history.append({
-                'role': 'assistant',
-                'content': """I couldn't understand that question. Here are some things I can help with:
-
-• **Revenue**: "What is my total revenue?"
-• **AOV**: "What is my average order value?"
-• **RTO**: "What is my RTO rate?" or "RTO by payment method"
-• **Products**: "Top 10 products"
-• **Categories**: "Revenue by category"
-• **Payments**: "COD vs Prepaid comparison"
-• **Customers**: "Top customers" or "Customer count"
-• **Cities**: "Revenue by city"
-
-Try one of these!"""
-            })
-        
+        query_type, params = QueryParser.parse(prompt)
+        response = process_query(engine, query_type, params)
+        st.session_state.chat_history.append(response)
         st.rerun()
     
-    # Clear chat button
+    # Clear chat
     if st.session_state.chat_history:
         if st.button("🗑️ Clear Chat"):
             st.session_state.chat_history = []
             st.rerun()
 
 
-def render_settings_page():
-    """Render the settings page."""
-    st.markdown('<p class="main-header">⚙️ Settings</p>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-header">Configure your dashboard</p>', unsafe_allow_html=True)
+def process_query(engine: AnalyticsEngine, query_type: str, params: Dict) -> Dict:
+    """Process a query and return response dict."""
     
-    tab1, tab2 = st.tabs(["Column Mappings", "About"])
+    response = {
+        'role': 'assistant',
+        'content': '',
+        'data': None,
+        'chart': None,
+        'sql': ''
+    }
+    
+    if query_type == 'total_revenue':
+        result = engine.get_total_revenue()
+        response['content'] = f"**Total Revenue: {format_currency(result['value'])}**\n\nThis is from {result['orders']:,} delivered orders only."
+        response['data'] = {'Revenue': result['value'], 'Delivered Orders': result['orders']}
+        response['sql'] = result.get('sql', '')
+    
+    elif query_type == 'aov':
+        result = engine.get_aov()
+        response['content'] = f"**Average Order Value: {format_currency(result['value'])}**\n\nCalculated from {result['orders']:,} delivered orders."
+        response['data'] = {'AOV': result['value'], 'Orders': result['orders']}
+        response['sql'] = result.get('sql', '')
+    
+    elif query_type == 'rto_rate':
+        result = engine.get_rto_rate()
+        response['content'] = f"""**RTO Rate: {result['value']:.2f}%**
+
+- RTO Orders: {result['rto_orders']:,}
+- Shipped Orders: {result['shipped']:,}
+
+*Note: RTO Rate = RTO / (Delivered + RTO), NOT RTO / All Orders*"""
+        response['data'] = result
+        response['sql'] = result.get('sql', '')
+    
+    elif query_type == 'status_breakdown':
+        df = engine.get_status_breakdown()
+        response['content'] = "**Orders by Status:**"
+        response['data'] = df
+        if not df.empty:
+            response['chart'] = ChartBuilder.create_pie_chart(df, 'Orders', 'Status')
+    
+    elif query_type == 'top_products':
+        limit = params.get('top_n', 10)
+        df = engine.get_top_products(limit)
+        response['content'] = f"**Top {limit} Products by Revenue:**"
+        response['data'] = df
+        if not df.empty:
+            response['chart'] = ChartBuilder.create_bar_chart(df, 'Product', 'Revenue', horizontal=True)
+    
+    elif query_type == 'category_breakdown':
+        df = engine.get_category_breakdown()
+        response['content'] = "**Revenue by Category:**"
+        response['data'] = df
+        if not df.empty:
+            response['chart'] = ChartBuilder.create_bar_chart(df, 'Category', 'Revenue')
+    
+    elif query_type == 'cod_vs_prepaid':
+        result = engine.get_cod_vs_prepaid()
+        if result:
+            response['content'] = f"""**COD vs Prepaid Comparison:**
+
+| Metric | COD | Prepaid |
+|--------|-----|---------|
+| Revenue | {format_currency(result['COD']['revenue'])} | {format_currency(result['Prepaid']['revenue'])} |
+| AOV | {format_currency(result['COD']['aov'])} | {format_currency(result['Prepaid']['aov'])} |
+| RTO Rate | {result['COD']['rto_rate']:.1f}% | {result['Prepaid']['rto_rate']:.1f}% |
+
+{'⚠️ **Insight:** COD has ' + str(round(result["COD"]["rto_rate"] - result["Prepaid"]["rto_rate"], 1)) + '% higher RTO rate than Prepaid' if result['COD']['rto_rate'] > result['Prepaid']['rto_rate'] else ''}"""
+            response['chart'] = ChartBuilder.create_comparison_chart(result)
+    
+    elif query_type == 'rto_by_payment':
+        df = engine.get_rto_by_payment()
+        response['content'] = "**RTO Rate by Payment Method:**"
+        response['data'] = df
+        if not df.empty:
+            response['chart'] = ChartBuilder.create_bar_chart(df, 'Payment Method', 'RTO Rate')
+    
+    elif query_type == 'rto_by_city':
+        df = engine.get_rto_by_city(10)
+        response['content'] = "**Top 10 Cities by RTO Rate:**"
+        response['data'] = df
+        if not df.empty:
+            response['chart'] = ChartBuilder.create_bar_chart(df, 'City', 'RTO Rate')
+    
+    elif query_type == 'top_customers':
+        limit = params.get('top_n', 10)
+        df = engine.get_top_customers(limit)
+        response['content'] = f"**Top {limit} Customers by Spending:**"
+        response['data'] = df
+    
+    elif query_type == 'revenue_trend':
+        df = engine.get_revenue_trend()
+        response['content'] = "**Revenue Trend:**"
+        response['data'] = df
+        if not df.empty:
+            response['chart'] = ChartBuilder.create_area_chart(df, 'Period', 'Revenue')
+    
+    elif query_type == 'city_breakdown':
+        df = engine.get_city_breakdown(10)
+        response['content'] = "**Top Cities by Revenue:**"
+        response['data'] = df
+        if not df.empty:
+            response['chart'] = ChartBuilder.create_bar_chart(df, 'City', 'Revenue', horizontal=True)
+    
+    elif query_type == 'payment_breakdown':
+        df = engine.get_payment_breakdown()
+        response['content'] = "**Revenue by Payment Method:**"
+        response['data'] = df
+        if not df.empty:
+            response['chart'] = ChartBuilder.create_bar_chart(df, 'Payment Method', 'Revenue')
+    
+    elif query_type == 'customer_count':
+        result = engine.get_customer_count()
+        response['content'] = f"**Unique Customers: {result['value']:,}**"
+        response['data'] = result
+    
+    elif query_type == 'summary':
+        revenue = engine.get_total_revenue()
+        aov = engine.get_aov()
+        orders = engine.get_order_count()
+        rto = engine.get_rto_rate()
+        
+        response['content'] = f"""**📊 Business Summary:**
+
+| Metric | Value |
+|--------|-------|
+| Total Revenue | {format_currency(revenue['value'])} |
+| Average Order Value | {format_currency(aov['value'])} |
+| Total Orders | {orders['value']:,} |
+| RTO Rate | {rto['value']:.2f}% |
+| Unique Customers | {engine.get_customer_count()['value']:,} |"""
+    
+    else:
+        response['content'] = """I couldn't understand that query. Try asking:
+
+- "What is my total revenue?"
+- "Show RTO rate by payment method"
+- "Top 10 products"
+- "COD vs Prepaid comparison"
+- "Revenue by category"
+- "Revenue trend"
+- "Top customers"
+- "RTO rate by city"
+"""
+    
+    return response
+
+
+def render_reports():
+    """Render the reports page."""
+    
+    st.markdown('<p class="main-title">📈 Reports</p>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-title">Generate detailed analytics reports</p>', unsafe_allow_html=True)
+    
+    if not st.session_state.active_dataset:
+        st.warning("Please upload and select a dataset first")
+        return
+    
+    ds = st.session_state.datasets[st.session_state.active_dataset]
+    engine = AnalyticsEngine(ds['df'], ds['mappings'])
+    
+    report_type = st.selectbox(
+        "Select Report",
+        ["📊 Executive Summary", "💰 Revenue Analysis", "🔄 RTO Analysis", "👥 Customer Analysis"]
+    )
+    
+    if report_type == "📊 Executive Summary":
+        st.markdown("## Executive Summary Report")
+        st.markdown(f"*Generated on {datetime.now().strftime('%Y-%m-%d %H:%M')}*")
+        
+        # KPIs
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            rev = engine.get_total_revenue()
+            st.metric("Revenue", format_currency(rev['value']))
+        
+        with col2:
+            aov = engine.get_aov()
+            st.metric("AOV", format_currency(aov['value']))
+        
+        with col3:
+            orders = engine.get_order_count()
+            st.metric("Orders", format_number(orders['value']))
+        
+        with col4:
+            rto = engine.get_rto_rate()
+            st.metric("RTO Rate", format_percentage(rto['value']))
+        
+        st.divider()
+        
+        # Charts
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("### Revenue Trend")
+            trend = engine.get_revenue_trend()
+            if not trend.empty:
+                fig = ChartBuilder.create_area_chart(trend, 'Period', 'Revenue')
+                st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            st.markdown("### Order Status")
+            status = engine.get_status_breakdown()
+            if not status.empty:
+                fig = ChartBuilder.create_pie_chart(status, 'Orders', 'Status')
+                st.plotly_chart(fig, use_container_width=True)
+        
+        # Tables
+        st.markdown("### Top Products")
+        products = engine.get_top_products(10)
+        if not products.empty:
+            st.dataframe(products, use_container_width=True, hide_index=True)
+        
+        st.markdown("### Top Customers")
+        customers = engine.get_top_customers(10)
+        if not customers.empty:
+            st.dataframe(customers, use_container_width=True, hide_index=True)
+    
+    elif report_type == "🔄 RTO Analysis":
+        st.markdown("## RTO Analysis Report")
+        
+        rto = engine.get_rto_rate()
+        st.metric("Overall RTO Rate", format_percentage(rto['value']), 
+                  f"{rto['rto_orders']:,} returns out of {rto['shipped']:,} shipped")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("### RTO by Payment Method")
+            rto_payment = engine.get_rto_by_payment()
+            if not rto_payment.empty:
+                st.dataframe(rto_payment, use_container_width=True, hide_index=True)
+                fig = ChartBuilder.create_bar_chart(rto_payment, 'Payment Method', 'RTO Rate')
+                st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            st.markdown("### RTO by City (Top 10)")
+            rto_city = engine.get_rto_by_city(10)
+            if not rto_city.empty:
+                st.dataframe(rto_city, use_container_width=True, hide_index=True)
+                fig = ChartBuilder.create_bar_chart(rto_city, 'City', 'RTO Rate')
+                st.plotly_chart(fig, use_container_width=True)
+        
+        # Insights
+        st.markdown("### 💡 Key Insights")
+        
+        comparison = engine.get_cod_vs_prepaid()
+        if comparison:
+            cod_rto = comparison['COD']['rto_rate']
+            prepaid_rto = comparison['Prepaid']['rto_rate']
+            
+            if cod_rto > prepaid_rto:
+                st.warning(f"⚠️ COD orders have {cod_rto - prepaid_rto:.1f}% higher RTO rate than Prepaid orders")
+                st.markdown("""
+                **Recommendations:**
+                - Consider incentivizing prepaid payments with discounts
+                - Implement stricter verification for COD orders in high-RTO cities
+                - Analyze COD order patterns for potential fraud detection
+                """)
+
+
+def render_settings():
+    """Render the settings page."""
+    
+    st.markdown('<p class="main-title">⚙️ Settings</p>', unsafe_allow_html=True)
+    
+    tab1, tab2 = st.tabs(["🎨 Preferences", "ℹ️ About"])
     
     with tab1:
-        if st.session_state.column_mappings:
-            st.subheader("Current Column Mappings")
+        st.markdown("### Display Settings")
+        
+        currency = st.selectbox(
+            "Currency",
+            ["INR (₹)", "USD ($)", "EUR (€)"],
+            index=0
+        )
+        
+        st.markdown("### Data Settings")
+        
+        if st.session_state.active_dataset:
+            ds = st.session_state.datasets[st.session_state.active_dataset]
             
-            for field, column in st.session_state.column_mappings.items():
-                col1, col2 = st.columns([1, 2])
-                with col1:
-                    st.markdown(f"**{field.replace('_', ' ').title()}**")
-                with col2:
-                    st.code(column)
+            st.markdown(f"**Active Dataset:** {st.session_state.active_dataset}")
+            st.markdown(f"**Rows:** {len(ds['df']):,}")
+            st.markdown(f"**Mapped Fields:** {len(ds['mappings'])}")
             
-            if st.button("🔄 Re-upload Data"):
-                st.session_state.df = None
-                st.session_state.cleaned_df = None
-                st.session_state.column_mappings = {}
-                st.session_state.mappings_confirmed = False
-                st.session_state.chat_history = []
-                st.rerun()
-        else:
-            st.info("No column mappings configured. Upload data first.")
+            st.markdown("**Current Mappings:**")
+            for field, col in ds['mappings'].items():
+                st.text(f"  {field.replace('_', ' ').title()}: {col}")
     
     with tab2:
-        st.subheader("About This Dashboard")
         st.markdown("""
-        **E-Commerce Analytics Platform**
+        ## About DataPulse
         
-        Built with:
-        - 🐍 Python + Streamlit
-        - 📊 Plotly for visualizations
-        - 🧠 Deterministic Query Engine (no hallucinations!)
+        **Version:** 1.0.0
         
-        **Key Features:**
-        - Auto-detect and clean e-commerce data
-        - Accurate business metrics (Revenue = Delivered only)
-        - Correct RTO calculation (proper denominator)
-        - AI chat with SQL transparency
+        **Built with:**
+        - 🐍 Python
+        - 📊 Streamlit
+        - 📈 Plotly
+        
+        **Features:**
+        - Multi-dataset management
+        - AI-powered natural language queries
+        - Real-time dashboard updates
+        - Accurate business logic (Revenue = Delivered only)
+        - Correct RTO calculation
         
         **Business Rules:**
         - Revenue only counts delivered orders
-        - AOV only from delivered orders
+        - AOV calculated from delivered orders only
         - RTO Rate = RTO / (Delivered + RTO) × 100
         """)
 
